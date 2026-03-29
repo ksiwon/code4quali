@@ -1,8 +1,8 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import styled from 'styled-components';
-import { useStore } from '../store/useStore';
-import type { Quotation } from '../types';
-import { getSpeakerColor, getSpeakerBadgeColor } from '../utils/fileParser';
+import { useStore } from '../../store/useStore';
+import type { Quotation } from '../../types';
+import { getSpeakerColor, getSpeakerBadgeColor } from '../../utils/fileParser';
 
 /* ─── Styled ─────────────────────────── */
 const Outer = styled.div`flex:1; display:flex; flex-direction:column; overflow:hidden; background:var(--surface);`;
@@ -147,6 +147,7 @@ export const DocumentViewer: React.FC = () => {
   const [aiSuggestions, setAiSuggestions] = useState<{name:string;reason:string}[]>([]);
   const [aiLoading, setAiLoading] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const quotationCounter = useRef(0);
 
   const doc = documents.find(d => d.id === activeDocumentId);
   const docQuotations = quotations.filter(q => q.documentId === activeDocumentId);
@@ -227,7 +228,7 @@ ${existingCodes || '(없음)'}
       documentId: doc.id, documentName: doc.name,
       text: sel.text, rowIndex: sel.rowIndex,
       startOffset: sel.startOffset, endOffset: sel.endOffset,
-      codes: [], comment, color: '#E07B54', createdAt: Date.now(),
+      codes: [], comment, color: '#E07B54', createdAt: ++quotationCounter.current,
     };
     addQuotation(newQ);
     setEditingQId(newQ.id);
@@ -235,12 +236,12 @@ ${existingCodes || '(없음)'}
     if (settings.geminiApiKey && !aiSuggestions.length) fetchAiSuggestions(newQ.text);
   };
 
-  const handleDone = () => {
+  const handleDone = useCallback(() => {
     if (editingQId) updateQuotation(editingQId, { comment });
     setSel(null); setEditingQId(null);
     setComment(''); setNewCodeName(''); setCodeSearch('');
     setAiSuggestions([]); window.getSelection()?.removeAllRanges();
-  };
+  }, [editingQId, comment, updateQuotation]);
 
   const handleAddNewCode = () => {
     if (!newCodeName.trim() || !editingQId) return;
@@ -265,13 +266,13 @@ ${existingCodes || '(없음)'}
     };
     if (sel || editingQId) document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [sel, editingQId]);
+  }, [sel, editingQId, handleDone]);
 
   /* ── render highlighted text ── */
   const renderContent = (content: string, rowIndex: number) => {
     const rowQs = docQuotations.filter(q => q.rowIndex === rowIndex);
     if (!rowQs.length) return content;
-    let result: React.ReactNode[] = [];
+    const result: React.ReactNode[] = [];
     let remaining = content;
     for (const q of rowQs) {
       const idx = remaining.indexOf(q.text);

@@ -1,7 +1,7 @@
 import { useState, useMemo, useRef } from 'react';
-import { parseCodebookJSON, readFileText, downloadCodebook, downloadCodingResult } from '../utils/tabExchange';
+import { parseCodebookJSON, readFileText, downloadCodebook, downloadCodingResult } from '../../utils/tabExchange';
 import styled from 'styled-components';
-import { useStore } from '../store/useStore';
+import { useStore } from '../../store/useStore';
 
 /* ─── Layout ─────────────────────────────────────────── */
 const Wrap = styled.div`
@@ -73,15 +73,6 @@ const CodeInfo = styled.div`flex: 1; min-width: 0;`;
 const CodeName = styled.div`font-size: 12.5px; font-weight: 600; color: var(--text);`;
 const CodeDesc = styled.div`font-size: 11px; color: var(--text-muted); margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;`;
 const CodeCount = styled.div`font-size: 11px; color: var(--text-muted); flex-shrink: 0;`;
-
-const CategorySection = styled.div`
-  padding: 6px 14px 4px;
-  font-size: 10px; font-weight: 800; color: var(--text-muted);
-  text-transform: uppercase; letter-spacing: 0.6px;
-  background: var(--surface2);
-  border-bottom: 1px solid var(--border);
-  position: sticky; top: 0; z-index: 1;
-`;
 
 /* ─── Center Pane – Quotation Board ──────────────────── */
 const BoardWrap = styled.div`flex: 1; overflow-y: auto; padding: 20px;`;
@@ -201,10 +192,8 @@ const ModalTitle = styled.div`font-size: 16px; font-weight: 800; margin-bottom: 
 
 const Field = styled.div`margin-bottom: 14px;`;
 
-const CATEGORIES = ['사용자 경험', '의료 및 돌봄', '기술적 상호작용', '기타'];
-
 /* ─── Component ──────────────────────────────────────── */
-type SortMode = 'name' | 'count' | 'category';
+type SortMode = 'name' | 'count';
 
 interface Props {
   onOpenInViewer?: (docId: string) => void;
@@ -221,23 +210,22 @@ export const CodeManager = ({ onOpenInViewer }: Props) => {
   const importRef = useRef<HTMLInputElement>(null);
 
   const [search, setSearch] = useState('');
-  const [sort, setSort] = useState<SortMode>('category');
+  const [sort, setSort] = useState<SortMode>('count');
   const [showModal, setShowModal] = useState(false);
   const [modalName, setModalName] = useState('');
   const [modalDesc, setModalDesc] = useState('');
-  const [modalCat, setModalCat] = useState('사용자 경험');
   const [editName, setEditName] = useState('');
   const [editDesc, setEditDesc] = useState('');
-  const [editCat, setEditCat] = useState('');
   const [newGroupName, setNewGroupName] = useState('');
 
   const selectedCode = codes.find(c => c.id === selectedCodeId) ?? null;
   const selectedGroups = codeGroups.filter(g => g.codeId === selectedCodeId);
 
   // Quotations for the selected code, keyed by group
-  const selectedQuotations = selectedCode
-    ? quotations.filter(q => q.codes.includes(selectedCode.id))
-    : [];
+  const selectedQuotations = useMemo(
+    () => selectedCode ? quotations.filter(q => q.codes.includes(selectedCode.id)) : [],
+    [selectedCode, quotations]
+  );
 
   // Group the quotations
   const groupedQuotations = useMemo(() => {
@@ -261,37 +249,24 @@ export const CodeManager = ({ onOpenInViewer }: Props) => {
     );
     if (sort === 'name') arr = [...arr].sort((a, b) => a.name.localeCompare(b.name));
     if (sort === 'count') arr = [...arr].sort((a, b) => b.quotationIds.length - a.quotationIds.length);
-    if (sort === 'category') arr = [...arr].sort((a, b) => (a.category || '').localeCompare(b.category || '') || a.name.localeCompare(b.name));
     return arr;
   }, [codes, search, sort]);
 
-  // Group left pane by category when sort === 'category'
-  const leftPaneSections = useMemo(() => {
-    if (sort !== 'category') return [{ cat: '', items: filteredCodes }];
-    const map = new Map<string, typeof filteredCodes>();
-    for (const c of filteredCodes) {
-      const cat = c.category || '기타';
-      if (!map.has(cat)) map.set(cat, []);
-      map.get(cat)!.push(c);
-    }
-    return Array.from(map.entries()).map(([cat, items]) => ({ cat, items }));
-  }, [filteredCodes, sort]);
-
   const handleSaveModal = () => {
     if (!modalName.trim()) return;
-    addCode(modalName.trim(), modalDesc.trim(), modalCat);
-    setModalName(''); setModalDesc(''); setModalCat('사용자 경험'); setShowModal(false);
+    addCode(modalName.trim(), modalDesc.trim());
+    setModalName(''); setModalDesc(''); setShowModal(false);
   };
 
   const handleSelectCode = (id: string) => {
     setSelectedCode(id === selectedCodeId ? null : id);
     const c = codes.find(c => c.id === id);
-    if (c) { setEditName(c.name); setEditDesc(c.comment); setEditCat(c.category || '기타'); }
+    if (c) { setEditName(c.name); setEditDesc(c.comment); }
   };
 
   const handleSaveEdit = () => {
     if (!selectedCodeId) return;
-    updateCode(selectedCodeId, { name: editName, comment: editDesc, category: editCat });
+    updateCode(selectedCodeId, { name: editName, comment: editDesc });
   };
 
   const handleAddGroup = () => {
@@ -334,31 +309,26 @@ export const CodeManager = ({ onOpenInViewer }: Props) => {
         </div>
         <FilterBar style={{ padding: '8px 12px', gap: 5 }}>
           <span style={{ fontSize: 10, color: 'var(--text-muted)', fontWeight: 700, marginRight: 2 }}>정렬</span>
-          {(['category', 'name', 'count'] as SortMode[]).map(s => (
+          {(['name', 'count'] as SortMode[]).map(s => (
             <SortBtn key={s} active={sort === s} onClick={() => setSort(s)}>
-              {s === 'category' ? '분류별' : s === 'name' ? '이름순' : '빈도순'}
+              {s === 'name' ? '이름순' : '빈도순'}
             </SortBtn>
           ))}
         </FilterBar>
         <Scrollable>
-          {leftPaneSections.map(sec => (
-            <div key={sec.cat}>
-              {sec.cat && <CategorySection>{sec.cat}</CategorySection>}
-              {sec.items.map(code => (
-                <CodeRow
-                  key={code.id}
-                  active={code.id === selectedCodeId}
-                  onClick={() => handleSelectCode(code.id)}
-                >
-                  <ColorDot color={code.color} />
-                  <CodeInfo>
-                    <CodeName>{code.name}</CodeName>
-                    {code.comment && <CodeDesc title={code.comment}>{code.comment}</CodeDesc>}
-                  </CodeInfo>
-                  <CodeCount>💬{code.quotationIds.length}</CodeCount>
-                </CodeRow>
-              ))}
-            </div>
+          {filteredCodes.map(code => (
+            <CodeRow
+              key={code.id}
+              active={code.id === selectedCodeId}
+              onClick={() => handleSelectCode(code.id)}
+            >
+              <ColorDot color={code.color} />
+              <CodeInfo>
+                <CodeName>{code.name}</CodeName>
+                {code.comment && <CodeDesc title={code.comment}>{code.comment}</CodeDesc>}
+              </CodeInfo>
+              <CodeCount>💬{code.quotationIds.length}</CodeCount>
+            </CodeRow>
           ))}
           {filteredCodes.length === 0 && (
             <div style={{ padding: 20, textAlign: 'center', color: 'var(--text-muted)', fontSize: 12 }}>
@@ -375,11 +345,6 @@ export const CodeManager = ({ onOpenInViewer }: Props) => {
             <PaneTitle style={{ display: 'inline' }}>
               {selectedCode ? selectedCode.name : '← 코드를 선택하세요'}
             </PaneTitle>
-            {selectedCode?.category && (
-              <span style={{ marginLeft: 8, fontSize: 11, color: 'var(--text-muted)', background: 'var(--surface2)', padding: '2px 7px', borderRadius: 99, border: '1px solid var(--border)' }}>
-                {selectedCode.category}
-              </span>
-            )}
           </div>
           {selectedCode && (
             <SmBtn variant="ghost" onClick={() => {
@@ -478,19 +443,6 @@ export const CodeManager = ({ onOpenInViewer }: Props) => {
                 />
               </Field>
               <Field>
-                <Label>분류 (Category)</Label>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                  {CATEGORIES.map(cat => (
-                    <GroupChip
-                      key={cat}
-                      color={selectedCode.color}
-                      active={editCat === cat}
-                      onClick={() => { setEditCat(cat); updateCode(selectedCode.id, { category: cat }); }}
-                    >{cat}</GroupChip>
-                  ))}
-                </div>
-              </Field>
-              <Field>
                 <Label>색상</Label>
                 <input
                   type="color"
@@ -574,17 +526,6 @@ export const CodeManager = ({ onOpenInViewer }: Props) => {
                 placeholder="이 코드가 분류하는 내용을 설명하세요..."
                 value={modalDesc} onChange={e => setModalDesc(e.target.value)}
               />
-            </Field>
-            <Field>
-              <Label>분류 (Category)</Label>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
-                {CATEGORIES.map(cat => (
-                  <GroupChip
-                    key={cat} color="var(--accent)" active={modalCat === cat}
-                    onClick={() => setModalCat(cat)}
-                  >{cat}</GroupChip>
-                ))}
-              </div>
             </Field>
             <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 8 }}>
               <SmBtn onClick={() => setShowModal(false)}>취소</SmBtn>

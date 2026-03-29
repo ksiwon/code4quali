@@ -54,8 +54,8 @@ export function downloadXLSX(codes: Code[], quotations: Quotation[], documents: 
 
   // Sheet 1: 코드북
   const codesData = [
-    ['키워드(Keyword)', '설명(Description)', '분류(Category)', '색상', 'Quotation 수'],
-    ...codes.map(c => [c.name, c.comment, c.category||'', c.color, c.quotationIds.length])
+    ['키워드(Keyword)', '설명(Description)', '색상', 'Quotation 수'],
+    ...codes.map(c => [c.name, c.comment, c.color, c.quotationIds.length])
   ];
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(codesData), 'codes');
 
@@ -77,12 +77,12 @@ export function downloadXLSX(codes: Code[], quotations: Quotation[], documents: 
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(qData), 'quotations');
 
   // Sheet 3: 코드-Quotation 매핑
-  const mapData = [['코드', '분류', '문서', 'Quotation 텍스트', '메모']];
+  const mapData = [['코드', '문서', 'Quotation 텍스트', '메모']];
   for (const code of codes) {
     for (const qid of code.quotationIds) {
       const q = quotations.find(q => q.id === qid);
       if (!q) continue;
-      mapData.push([code.name, code.category||'', q.documentName, q.text, q.comment.startsWith('__group:')?'':q.comment]);
+      mapData.push([code.name, q.documentName, q.text, q.comment.startsWith('__group:')?'':q.comment]);
     }
   }
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(mapData), 'code-quotation');
@@ -104,14 +104,14 @@ export function parseCodebookJSON(json: string): { codes: Partial<Code>[]; codeG
     }
     // Try MEDial-codes.xlsx style: array of {name, comment}
     if (Array.isArray(data)) {
-      return { codes: data.map((d: any) => ({ name: d.name || d['name'], comment: d.comment || d['comment'] || '' })), codeGroups: [] };
+      return { codes: data.map((d: Record<string, unknown>) => ({ name: String(d.name || d['name'] || ''), comment: String(d.comment || d['comment'] || '') })), codeGroups: [] };
     }
     return null;
   } catch { return null; }
 }
 
 /* ── CSV 텍스트 파싱 (STT 결과 → Document) ── */
-export function parseTranscriptCSV(text: string, _filename: string): { time: string; speaker: string; content: string }[] {
+export function parseTranscriptCSV(text: string): { time: string; speaker: string; content: string }[] {
   const lines = text.replace(/^\uFEFF/, '').split('\n');
   const rows: { time: string; speaker: string; content: string }[] = [];
   let headerSkipped = false;
@@ -134,6 +134,24 @@ function downloadText(text: string, filename: string, type: string) {
   a.download = filename;
   a.click();
   URL.revokeObjectURL(a.href);
+}
+
+/** ── Query 결과 CSV 다운로드 ── */
+export function downloadQueryCSV(results: Quotation[], filename: string) {
+  const header = '문서,텍스트,코드들,메모\n';
+  const body = results.map(q => {
+    const codesStr = q.codes.join('; ');
+    return `"${q.documentName.replace(/"/g,'""')}","${q.text.replace(/"/g,'""')}","${codesStr.replace(/"/g,'""')}","${(q.comment||'').replace(/"/g,'""')}"`;
+  }).join('\n');
+  downloadText('\uFEFF' + header + body, filename, 'text/csv');
+}
+
+/** ── 행렬 결과 CSV 다운로드 ── */
+export function downloadMatrixCSV(matrix: string[][], filename: string) {
+  const body = matrix.map(row => 
+    row.map(cell => `"${String(cell).replace(/"/g,'""')}"`).join(',')
+  ).join('\n');
+  downloadText('\uFEFF' + body, filename, 'text/csv');
 }
 
 function today() {

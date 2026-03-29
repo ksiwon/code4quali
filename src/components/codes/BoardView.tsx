@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import styled from 'styled-components';
-import { useStore } from '../store/useStore';
+import { useStore } from '../../store/useStore';
 
 const Wrap = styled.div`
   flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--bg);
@@ -15,16 +15,6 @@ const Header = styled.div`
 `;
 
 const Title = styled.div`font-size: 15px; font-weight: 800; color: var(--text);`;
-
-const FilterChip = styled.button<{ active?: boolean; color?: string }>`
-  font-size: 11px; font-weight: 600;
-  padding: 4px 10px; border-radius: 99px;
-  background: ${p => p.active ? (p.color || 'var(--text)') + '22' : 'var(--surface2)'};
-  color: ${p => p.active ? (p.color || 'var(--text)') : 'var(--text-secondary)'};
-  border: 1.5px solid ${p => p.active ? (p.color || 'var(--text)') + '66' : 'var(--border)'};
-  white-space: nowrap; transition: all 0.15s;
-  &:hover { border-color: ${p => p.color || 'var(--accent)'}; }
-`;
 
 const SearchInput = styled.input`
   padding: 6px 12px; border: 1px solid var(--border); border-radius: 7px;
@@ -95,19 +85,15 @@ const GroupBadge = styled.div`
   display: inline-block; margin-bottom: 5px;
 `;
 
-const CATEGORIES = ['전체', '사용자 경험', '의료 및 돌봄', '기술적 상호작용', '기타'];
-
 export const BoardView = ({ onOpenInViewer }: { onOpenInViewer?: (id: string) => void }) => {
   const { codes, quotations, codeGroups } = useStore();
-  const [catFilter, setCatFilter] = useState('전체');
   const [search, setSearch] = useState('');
 
   const visibleCodes = useMemo(() => codes.filter(c => {
-    if (catFilter !== '전체' && (c.category || '기타') !== catFilter) return false;
     if (search && !c.name.toLowerCase().includes(search.toLowerCase()) &&
         !c.comment.toLowerCase().includes(search.toLowerCase())) return false;
     return true;
-  }), [codes, catFilter, search]);
+  }), [codes, search]);
 
   const getCodeQuotations = (codeId: string) =>
     quotations.filter(q => q.codes.includes(codeId));
@@ -126,15 +112,7 @@ export const BoardView = ({ onOpenInViewer }: { onOpenInViewer?: (id: string) =>
           placeholder="코드 검색..."
           value={search} onChange={e => setSearch(e.target.value)}
         />
-        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-          {CATEGORIES.map(cat => (
-            <FilterChip
-              key={cat}
-              active={catFilter === cat}
-              onClick={() => setCatFilter(cat)}
-            >{cat}</FilterChip>
-          ))}
-        </div>
+
         <div style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--text-muted)' }}>
           {visibleCodes.length}개 코드
         </div>

@@ -1,4 +1,4 @@
-import { useStore } from '../store/useStore';
+import { useStore } from '../../store/useStore';
 import styled from 'styled-components';
 
 const SidebarWrap = styled.div`

@@ -1,8 +1,8 @@
 import { useRef } from 'react';
 import styled from 'styled-components';
-import { useStore } from '../store/useStore';
-import { parseFile } from '../utils/fileParser';
-import { downloadFullProject, parseCodebookJSON, readFileText } from '../utils/tabExchange';
+import { useStore } from '../../store/useStore';
+import { parseFile } from '../../utils/fileParser';
+import { downloadFullProject, parseCodebookJSON, readFileText } from '../../utils/tabExchange';
 
 const Wrap = styled.div`flex:1; display:flex; flex-direction:column; overflow:hidden; background:var(--surface);`;
 const Header = styled.div`padding:12px 14px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; flex-shrink:0;`;
@@ -61,11 +61,22 @@ export const DocumentManager = () => {
     for (const file of Array.from(files)) {
       if (file.name.endsWith('.json') || file.name.endsWith('.qualcoder')) {
         const text = await readFileText(file);
-        // Try as codebook first, then full project
+        try {
+          const payload = JSON.parse(text);
+          // If it's explicitly a full project
+          if (payload.type === 'project' || (payload.documents && payload.quotations)) {
+            if (importProjectData(text)) alert('✅ 프로젝트 불러오기 완료');
+            else alert('❌ 프로젝트 형식 오류');
+            continue;
+          }
+        } catch {
+          // Ignore parse errors and fall through to codebook check
+        }
+        
+        // Next, try codebook
         const cb = parseCodebookJSON(text);
-        if (cb) { importCodes(cb.codes); alert(`✅ 코드북 불러오기 완료 (${cb.codes.length}개 코드)`); continue; }
-        const ok = importProjectData(text);
-        if (ok) { alert('✅ 프로젝트 불러오기 완료'); continue; }
+        if (cb && cb.codes.length > 0) { importCodes(cb.codes); alert(`✅ 코드북 불러오기 완료 (${cb.codes.length}개 코드)`); continue; }
+        
         alert('❌ 파일 형식을 인식할 수 없습니다.');
         continue;
       }

@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useEffect } from 'react';
 import { useStore } from '../../store/useStore';
 import styled, { keyframes, css } from 'styled-components';
 
@@ -19,27 +19,6 @@ const pulse = keyframes`0%,100% { opacity: 1; } 50% { opacity: 0.4; }`;
 const Wrap = styled.div`
   flex: 1; display: flex; flex-direction: column; overflow: hidden;
   background: #F7F6F3; font-family: inherit;
-`;
-
-const Header = styled.div`
-  padding: 16px 24px; border-bottom: 1px solid var(--border);
-  background: var(--surface); display: flex; align-items: center; gap: 14px; flex-shrink: 0;
-`;
-
-const HeaderTitle = styled.div`font-size: 16px; font-weight: 800; color: var(--text);`;
-const HeaderSub = styled.div`font-size: 12px; color: var(--text-muted);`;
-
-const StepBar = styled.div`
-  display: flex; align-items: center; gap: 0;
-  margin-left: auto;
-`;
-
-const Step = styled.div<{ state: 'done' | 'active' | 'idle' }>`
-  display: flex; align-items: center; gap: 6px;
-  font-size: 11px; font-weight: 700; padding: 5px 14px;
-  color: ${p => p.state === 'active' ? 'white' : p.state === 'done' ? 'var(--accent)' : 'var(--text-muted)'};
-  background: ${p => p.state === 'active' ? 'var(--accent)' : 'transparent'};
-  border-radius: 99px; transition: all 0.3s;
 `;
 
 const Body = styled.div`flex: 1; display: flex; overflow: hidden;`;
@@ -138,6 +117,14 @@ const StatusBadge = styled.div<{ status: AudioFile['status'] }>`
     p.status === 'processing' ? 'var(--accent)' :
     p.status === 'uploading' ? 'var(--blue)' : 'var(--text-muted)'};
   animation: ${p => (p.status === 'processing' || p.status === 'uploading') ? css`${pulse} 1.5s ease infinite` : 'none'};
+`;
+
+const DeleteBtn = styled.button`
+  width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface2); border: 1px solid var(--border);
+  font-size: 12px; color: var(--text-muted); transition: all 0.15s;
+  &:hover { background: #FEE2E2; border-color: #FECACA; color: #DC2626; }
 `;
 
 const ProgressBar = styled.div<{ pct: number; status: AudioFile['status'] }>`
@@ -275,7 +262,7 @@ function statusLabel(s: AudioFile['status']) {
 
 /* ─── Main Component ────────────────────────────── */
 export const TranscribeView = () => {
-  const { settings, updateSettings } = useStore();
+  const { settings, updateSettings, setSttStats } = useStore();
   const [apiKey, setApiKey] = useState(settings.geminiApiKey);
   const [apiValid, setApiValid] = useState<boolean | undefined>(undefined);
   const [model, setModel] = useState(settings.model);
@@ -290,7 +277,20 @@ export const TranscribeView = () => {
   const [running, setRunning] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const logRef = useRef<HTMLDivElement>(null);
-  let logId = useRef(0);
+  const logId = useRef(0);
+
+  /* TopBar에 STT 통계 실시간 동기화 */
+  useEffect(() => {
+    setSttStats({
+      total: files.length,
+      done: files.filter(f => f.status === 'done').length,
+      results: results.length,
+      stage,
+    });
+  }, [files, results, stage, setSttStats]);
+
+  /* 언마운트 시 TopBar sttStats 초기화 */
+  useEffect(() => () => { setSttStats(null); }, [setSttStats]);
 
   const log = useCallback((msg: string, level: LogLevel = 'info') => {
     const entry: LogEntry = { id: logId.current++, level, msg, ts: nowTs() };
@@ -313,6 +313,12 @@ export const TranscribeView = () => {
     }
     setFiles(prev => [...prev, ...arr]);
     if (arr.length) log(`${arr.length}개 파일 추가됨`, 'info');
+  };
+
+  /* ─── 파일 삭제 ─── */
+  const removeFile = (name: string) => {
+    setFiles(prev => prev.filter(f => f.name !== name));
+    log(`파일 삭제됨: ${name}`, 'warn');
   };
 
   /* ─── Gemini API call ─── */
@@ -400,14 +406,16 @@ MM:SS,화자명,"발화 내용"
     // Cleanup file
     try {
       await fetch(`https://generativelanguage.googleapis.com/v1beta/${fileName}?key=${apiKey}`, { method: 'DELETE' });
-    } catch (_) {}
+    } catch {
+      // ignore cleanup error
+    }
 
     return rawText;
   };
 
   /* ─── Parse CSV text ─── */
   const parseCSVText = (raw: string): { time: string; speaker: string; content: string }[] => {
-    let text = raw.trim().replace(/^```(?:csv)?\s*/i, '').replace(/\s*```$/, '').trim();
+    const text = raw.trim().replace(/^```(?:csv)?\s*/i, '').replace(/\s*```$/, '').trim();
     const lines = text.split('\n');
     let startIdx = 0;
     for (let i = 0; i < lines.length; i++) {
@@ -419,7 +427,6 @@ MM:SS,화자명,"발화 내용"
     for (let i = startIdx; i < lines.length; i++) {
       const line = lines[i].trim();
       if (!line) continue;
-      // Simple CSV parse: time,speaker,"content" or time,speaker,content
       const m = line.match(/^([^,]+),([^,]+),(.*)$/);
       if (m) {
         const content = m[3].replace(/^"(.*)"$/, '$1').replace(/""/g, '"');
@@ -431,7 +438,6 @@ MM:SS,화자명,"발화 내용"
 
   /* ─── Completeness check ─── */
   const checkCompleteness = (rows: { time: string }[], fileSizeMB: number): number => {
-    // Estimate duration from file size (rough: ~1MB/min for m4a)
     const estimatedDurationMin = fileSizeMB * 0.9;
     const lastRow = rows[rows.length - 1];
     if (!lastRow) return 0;
@@ -489,9 +495,10 @@ MM:SS,화자명,"발화 내용"
           log(`  ⚠️ 완성도 ${completeness}% — 전사가 짧게 끝났을 수 있습니다.`, 'warn');
         }
 
-      } catch (err: any) {
+      } catch (err: unknown) {
         updateFile(af.name, { status: 'error', progress: 0 });
-        log(`  ❌ 오류: ${err.message}`, 'error');
+        const msg = err instanceof Error ? err.message : String(err);
+        log(`  ❌ 오류: ${msg}`, 'error');
       }
 
       if (i < pendingFiles.length - 1) {
@@ -532,7 +539,7 @@ MM:SS,화자명,"발화 내용"
         { method: 'GET' }
       );
       setApiValid(res.ok);
-    if (res.ok) { updateSettings({ geminiApiKey: apiKey }); }
+      if (res.ok) { updateSettings({ geminiApiKey: apiKey }); }
       log(res.ok ? '✅ API 키 유효함' : '❌ API 키 무효 또는 오류', res.ok ? 'success' : 'error');
     } catch {
       setApiValid(false);
@@ -540,25 +547,10 @@ MM:SS,화자명,"발화 내용"
     }
   };
 
-  const stageIdx = { setup: 0, transcribing: 1, merging: 2, converting: 3, done: 4 }[stage];
+  const pendingCount = files.filter(f => f.status === 'pending' || f.status === 'error').length;
 
   return (
     <Wrap>
-      {/* ── Header ── */}
-      <Header>
-        <div>
-          <HeaderTitle>🎙️ 인터뷰 전사 파이프라인</HeaderTitle>
-          <HeaderSub>Gemini API를 이용한 STT + 화자 분리 + CSV 출력</HeaderSub>
-        </div>
-        <StepBar>
-          {['설정', '전사(STT)', '결과 확인'].map((s, i) => (
-            <Step key={s} state={i < stageIdx ? 'done' : i === Math.min(stageIdx, 2) ? 'active' : 'idle'}>
-              {i < stageIdx ? '✓' : i + 1} {s}
-            </Step>
-          ))}
-        </StepBar>
-      </Header>
-
       <Body>
         {/* ── Left: Config + File List ── */}
         <LeftCol>
@@ -578,7 +570,7 @@ MM:SS,화자명,"발화 내용"
             </ApiRow>
             {apiValid === false && (
               <div style={{ fontSize: 11, color: '#DC2626', marginTop: 5 }}>
-                ❌ 유효하지 않은 API 키입니다. Google AI Studio에서 키를 발급하세요.
+                ❌ 유효하지 않은 API 키입니다.
               </div>
             )}
             {apiValid === true && (
@@ -621,15 +613,20 @@ MM:SS,화자명,"발화 내용"
             />
           </Section>
 
-          {/* 파일 목록 */}
+          {/* 파일 목록 헤더 */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 16px 4px', flexShrink: 0 }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
               파일 목록 ({files.length})
             </div>
             {files.length > 0 && (
-              <Btn variant="ghost" onClick={() => setFiles(f => f.filter(x => x.status !== 'pending'))} style={{ fontSize: 10, padding: '2px 8px' }}>
-                완료만 남기기
-              </Btn>
+              <div style={{ display: 'flex', gap: 4 }}>
+                <Btn variant="ghost" onClick={() => setFiles(f => f.filter(x => x.status !== 'pending'))} style={{ fontSize: 10, padding: '2px 8px' }}>
+                  완료만 남기기
+                </Btn>
+                <Btn variant="danger" onClick={() => { if (confirm('모든 파일을 목록에서 제거하시겠습니까?')) { setFiles([]); log('파일 목록 전체 삭제됨', 'warn'); } }} style={{ fontSize: 10, padding: '2px 8px' }}>
+                  전체 삭제
+                </Btn>
+              </div>
             )}
           </div>
 
@@ -656,6 +653,16 @@ MM:SS,화자명,"발화 내용"
                       ? <>{statusLabel(f.status)} <Spinner /></>
                       : statusLabel(f.status)}
                   </StatusBadge>
+                  {/* 삭제 버튼 - 진행 중이 아닐 때만 활성화 */}
+                  <DeleteBtn
+                    title="파일 제거"
+                    onClick={() => removeFile(f.name)}
+                    disabled={f.status === 'uploading' || f.status === 'processing'}
+                    style={{ opacity: (f.status === 'uploading' || f.status === 'processing') ? 0.3 : 1,
+                             cursor: (f.status === 'uploading' || f.status === 'processing') ? 'not-allowed' : 'pointer' }}
+                  >
+                    ×
+                  </DeleteBtn>
                 </FileCardTop>
                 <ProgressBar pct={f.progress} status={f.status} />
                 {f.completeness !== undefined && (
@@ -680,10 +687,10 @@ MM:SS,화자명,"발화 내용"
             <div style={{ flex: 1 }} />
             <Btn
               variant="accent"
-              disabled={running || files.filter(f => f.status === 'pending' || f.status === 'error').length === 0}
+              disabled={running || pendingCount === 0}
               onClick={handleRun}
             >
-              {running ? <><Spinner /> 전사 중...</> : `▶ 전사 시작 (${files.filter(f => f.status === 'pending' || f.status === 'error').length}개)`}
+              {running ? <><Spinner /> 전사 중...</> : `▶ 전사 시작 (${pendingCount}개)`}
             </Btn>
           </ControlRow>
         </LeftCol>

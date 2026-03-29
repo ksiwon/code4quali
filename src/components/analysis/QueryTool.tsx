@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import styled from 'styled-components';
-import { useStore } from '../store/useStore';
+import { useStore } from '../../store/useStore';
+import { downloadQueryCSV } from '../../utils/tabExchange';
 
 /* ─── Styles ─────────────────────────── */
 const Wrap = styled.div`flex:1; display:flex; flex-direction:column; overflow:hidden; background:var(--bg);`;
@@ -48,6 +49,12 @@ const RunBtn = styled.button<{disabled?:boolean}>`
   background:${p=>p.disabled?'var(--surface2)':'var(--accent)'}; color:${p=>p.disabled?'var(--text-muted)':'white'};
   cursor:${p=>p.disabled?'not-allowed':'pointer'}; transition:opacity 0.15s;
   &:hover:not(:disabled){opacity:0.85;}
+`;
+const TBtn = styled.button`
+  font-size:11px; font-weight:700; padding:4px 9px; border-radius:6px;
+  background:var(--surface); border:1.5px solid var(--border);
+  color:var(--text-secondary); transition:all 0.15s;
+  &:hover{border-color:var(--accent);color:var(--accent);}
 `;
 
 const ResultHeader = styled.div`
@@ -143,7 +150,7 @@ export const QueryTool = ({ onOpenDoc }: { onOpenDoc?: (id:string)=>void }) => {
                 {i === 0 ? (
                   <OpBadge op="AND" style={{background:'#F0F0F0',color:'#888'}}>START</OpBadge>
                 ) : (
-                  <OpSelect value={cond.op} onChange={e => updateCondition(cond.id, { op: e.target.value as any })}>
+                  <OpSelect value={cond.op} onChange={e => updateCondition(cond.id, { op: e.target.value as Condition['op'] })}>
                     <option value="AND">AND</option>
                     <option value="OR">OR</option>
                     <option value="NOT">NOT</option>
@@ -195,7 +202,6 @@ export const QueryTool = ({ onOpenDoc }: { onOpenDoc?: (id:string)=>void }) => {
             <>
               <ResultHeader>
                 <span style={{fontWeight:700,fontSize:13}}>검색 결과</span>
-                <span style={{fontSize:12,color:'var(--text-muted)'}}>{filteredResults?.length}개 Quotation</span>
                 <div style={{marginLeft:'auto',display:'flex',gap:6,alignItems:'center'}}>
                   <span style={{fontSize:11,color:'var(--text-muted)'}}>문서:</span>
                   <OpSelect value={docFilter} onChange={e=>setDocFilter(e.target.value)} style={{fontSize:11}}>
@@ -207,6 +213,16 @@ export const QueryTool = ({ onOpenDoc }: { onOpenDoc?: (id:string)=>void }) => {
                     <option value="all">전체</option>
                     {allSpeakers.map(s=><option key={s} value={s}>{s}</option>)}
                   </OpSelect>
+                  <TBtn onClick={() => {
+                    if (!filteredResults) return;
+                    const forCsv = filteredResults.map(q => ({
+                      ...q,
+                      codes: q.codes.map(cid => codes.find(c => c.id === cid)?.name || cid)
+                    }));
+                    downloadQueryCSV(forCsv, `query_result_${new Date().toISOString().slice(0,10)}.csv`);
+                  }}>
+                    ↓ CSV 내보내기
+                  </TBtn>
                 </div>
               </ResultHeader>
               <ResultScroll>

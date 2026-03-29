@@ -1,6 +1,6 @@
 import { createGlobalStyle } from 'styled-components';
 
-export const GlobalStyle = createGlobalStyle`
+export const GlobalStyle = createGlobalStyle<{ themeMode: 'light' | 'dark' }>`
   *, *::before, *::after {
     box-sizing: border-box;
     margin: 0;
@@ -8,16 +8,29 @@ export const GlobalStyle = createGlobalStyle`
   }
 
   :root {
-    --bg: #F4F3F0;
-    --surface: #FFFFFF;
-    --surface2: #F9F8F6;
-    --border: #E2E0DC;
-    --border2: #D0CEC9;
-    --text: #1A1917;
-    --text-secondary: #6B6863;
-    --text-muted: #9B9793;
-    --accent: #E07B54;
-    --accent-light: #FAF0EB;
+    ${p => p.themeMode === 'light' ? `
+      --bg: #F4F3F0;
+      --surface: #FFFFFF;
+      --surface2: #F9F8F6;
+      --border: #E2E0DC;
+      --border2: #D0CEC9;
+      --text: #1A1917;
+      --text-secondary: #6B6863;
+      --text-muted: #9B9793;
+      --accent: #E07B54;
+      --accent-light: #FAF0EB;
+    ` : `
+      --bg: #1A1A1A;
+      --surface: #242424;
+      --surface2: #2D2D2D;
+      --border: #3D3D3D;
+      --border2: #4D4D4D;
+      --text: #E0E0E0;
+      --text-secondary: #A0A0A0;
+      --text-muted: #707070;
+      --accent: #FF8F6B;
+      --accent-light: #3D2D28;
+    `}
     --blue: #4A6FA5;
     --blue-light: #EBF1FA;
     --green: #61D9A5;

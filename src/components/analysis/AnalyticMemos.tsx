@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import styled from 'styled-components';
-import { useStore } from '../store/useStore';
-import type { AnalyticMemo } from '../types';
+import { useStore } from '../../store/useStore';
+import type { AnalyticMemo } from '../../types';
 
 const Wrap = styled.div`flex:1; display:flex; overflow:hidden; background:var(--bg);`;
 

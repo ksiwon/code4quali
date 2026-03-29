@@ -1,16 +1,16 @@
 import { useEffect } from 'react';
-import { useStore } from './store/useStore';
+import { useStore } from '../store/useStore';
 import styled from 'styled-components';
-import { GlobalStyle } from './styles/GlobalStyle';
+import { GlobalStyle } from '../styles/GlobalStyle';
 
 // 분류된 컴포넌트 import
-import { Sidebar, TopBar }                          from './components/layout';
-import { DocumentManager, DocumentViewer }          from './components/documents';
-import { CodeManager, BoardView }                   from './components/codes';
+import { Sidebar, TopBar }                          from './layout';
+import { DocumentManager, DocumentViewer }          from './documents';
+import { CodeManager, BoardView }                   from './codes';
 import { NetworkView, QueryTool,
-         CooccurrenceMatrix, AnalyticMemos }        from './components/analysis';
-import { TranscribeView }                           from './components/stt';
-import { SettingsView }                             from './components/settings';
+         CooccurrenceMatrix, AnalyticMemos }        from './analysis';
+import { TranscribeView }                           from './stt';
+import { SettingsView }                             from './settings';
 
 const AppWrap  = styled.div`display:flex; flex-direction:column; height:100vh; overflow:hidden;`;
 const MainWrap = styled.div`display:flex; flex:1; overflow:hidden;`;
@@ -18,9 +18,9 @@ const LeftPanel   = styled.div`width:300px; flex-shrink:0; display:flex; flex-di
 const CenterPanel = styled.div`flex:1; display:flex; flex-direction:column; overflow:hidden; min-width:0;`;
 
 function App() {
-  const { activeView, setActiveView, setActiveDocument, loadProject, settings } = useStore();
+  const { activeView, setActiveView, setActiveDocument, loadProject } = useStore();
 
-  useEffect(() => { loadProject(); }, [loadProject]);
+  useEffect(() => { loadProject(); }, []);
 
   const handleOpenInViewer = (docId: string) => {
     setActiveDocument(docId);
@@ -31,7 +31,7 @@ function App() {
 
   return (
     <>
-      <GlobalStyle themeMode={settings.theme || 'light'} />
+      <GlobalStyle />
       <AppWrap>
         <TopBar />
         <MainWrap>

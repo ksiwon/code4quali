@@ -4,6 +4,27 @@ export interface TranscriptRow {
   content: string;
 }
 
+export type NVNodeType = 'code' | 'quotation' | 'memo';
+
+export interface NVNode {
+  id: string;
+  type: NVNodeType;
+  label: string;
+  color: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  sourceId?: string; // codeId or quotationId
+  subLabel?: string; // e.g. document name for quotation
+}
+
+export interface NVEdge {
+  id: string;
+  from: string;
+  to: string;
+}
+
 export interface Document {
   id: string;
   name: string;
@@ -32,7 +53,6 @@ export interface Code {
   name: string;
   comment: string;
   color: string;
-  category?: string;
   quotationIds: string[];
   memo?: string;
   createdAt?: number;
@@ -60,7 +80,6 @@ export interface AppSettings {
   model: string;
   autoSave: boolean;
   theme: 'light' | 'dark';
-  defaultCategory: string;
   interviewerLabel: string;
 }
 
@@ -73,6 +92,8 @@ export interface ProjectData {
   codes: Code[];
   codeGroups: CodeGroup[];
   memos: AnalyticMemo[];
+  networkNodes?: NVNode[];
+  networkEdges?: NVEdge[];
 }
 
 export type ActiveView =

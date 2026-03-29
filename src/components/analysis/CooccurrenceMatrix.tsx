@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import styled from 'styled-components';
-import { useStore } from '../store/useStore';
+import { useStore } from '../../store/useStore';
+import { downloadMatrixCSV } from '../../utils/tabExchange';
 
 const Wrap = styled.div`flex:1; display:flex; flex-direction:column; overflow:hidden; background:var(--bg);`;
 const Header = styled.div`
@@ -77,10 +78,13 @@ const DetailPanel = styled.div`
 `;
 const DPTitle = styled.div`font-size:13px; font-weight:700; margin-bottom:10px;`;
 const QItem = styled.div`
-  padding:8px 10px; border-radius:7px; background:var(--surface2);
-  border:1px solid var(--border); margin-bottom:6px; font-size:12px;
-  line-height:1.6; color:var(--text); cursor:pointer;
   &:hover{border-color:var(--accent);}
+`;
+const TBtn = styled.button`
+  font-size:11px; font-weight:700; padding:5px 10px; border-radius:7px;
+  background:var(--surface); border:1.5px solid var(--border);
+  color:var(--text-secondary); transition:all 0.15s;
+  &:hover{border-color:var(--accent);color:var(--accent);}
 `;
 
 type CellInfo = { codeA: string; codeB: string; count: number; quotations: string[] };
@@ -159,6 +163,23 @@ export const CooccurrenceMatrix = ({ onOpenDoc }: { onOpenDoc?: (id: string) => 
               onChange={e => setMinCount(Number(e.target.value))}
               style={{ width:50,padding:'4px 7px',border:'1px solid var(--border)',borderRadius:6,fontSize:12,background:'var(--surface2)',color:'var(--text)',outline:'none' }}
             />
+            <TBtn onClick={() => {
+              const rows: string[][] = [];
+              // Header
+              rows.push(['코드', ...activeCodes.map(c => c.name)]);
+              // Data
+              activeCodes.forEach(ca => {
+                const row = [ca.name];
+                activeCodes.forEach(cb => {
+                  if (ca.id === cb.id) row.push('-');
+                  else row.push(String(matrix[ca.id]?.[cb.id]?.length || 0));
+                });
+                rows.push(row);
+              });
+              downloadMatrixCSV(rows, `matrix_${new Date().toISOString().slice(0,10)}.csv`);
+            }}>
+              ↓ CSV 내보내기
+            </TBtn>
           </div>
         </div>
       </Header>

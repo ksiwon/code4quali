@@ -145,6 +145,28 @@ const MEMO_COLORS = ['#4A6FA5', '#61A87B', '#E07B54', '#9B59B6', '#E67E22'];
 
 const truncate = (s: string, n: number) => s.length > n ? s.slice(0, n - 1) + '…' : s;
 
+const getNodeHeight = (node: NVNode) => {
+  if (node.type === 'quotation') {
+    let lines = 1;
+    let cur = 0;
+    for (let i = 0; i < node.label.length; i++) {
+      cur += node.label.charCodeAt(i) > 255 ? 1 : 0.55;
+      if (cur > 10.2) { lines++; cur = 0; }
+    }
+    return Math.max(node.height, 28 + lines * 15.5 + (node.subLabel ? 14 : 0));
+  }
+  if (node.type === 'memo') {
+    let lines = 1;
+    let cur = 0;
+    for (let i = 0; i < node.label.length; i++) {
+      cur += node.label.charCodeAt(i) > 255 ? 1 : 0.55;
+      if (cur > 12.5) { lines++; cur = 0; }
+    }
+    return Math.max(node.height, 35 + lines * 17);
+  }
+  return node.height;
+};
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export const NetworkView = () => {
@@ -318,7 +340,7 @@ export const NetworkView = () => {
       const fromId = portDrag.current.fromId;
       const target = nodesRef.current.find(n =>
         pt.x >= n.x && pt.x <= n.x + n.width &&
-        pt.y >= n.y && pt.y <= n.y + n.height && n.id !== fromId
+        pt.y >= n.y && pt.y <= n.y + getNodeHeight(n) && n.id !== fromId
       );
       if (target) {
         const exists = edgesRef.current.some(ed =>
@@ -339,7 +361,7 @@ export const NetworkView = () => {
     if (!node) return;
     portDrag.current = { fromId: nodeId };
     const x1 = node.x + node.width / 2;
-    const y1 = node.y + node.height;
+    const y1 = node.y + getNodeHeight(node);
     const pt = s2c(e.clientX, e.clientY);
     setDraftEdge({ fromId: nodeId, x1, y1, x2: pt.x, y2: pt.y });
   }, [s2c]);
@@ -355,7 +377,8 @@ export const NetworkView = () => {
 
   // ─── Edge paths ──────────────────────────────────────────────────────────
   const edgePath = (a: NVNode, b: NVNode) => {
-    const x1 = a.x + a.width / 2, y1 = a.y + a.height;
+    const aH = getNodeHeight(a);
+    const x1 = a.x + a.width / 2, y1 = a.y + aH;
     const x2 = b.x + b.width / 2, y2 = b.y;
     const cy = (y1 + y2) / 2;
     return `M${x1} ${y1} C${x1} ${cy},${x2} ${cy},${x2} ${y2}`;
@@ -372,7 +395,7 @@ export const NetworkView = () => {
     const minX = Math.min(...nodes.map(n => n.x));
     const maxX = Math.max(...nodes.map(n => n.x + n.width));
     const minY = Math.min(...nodes.map(n => n.y));
-    const maxY = Math.max(...nodes.map(n => n.y + n.height));
+    const maxY = Math.max(...nodes.map(n => n.y + getNodeHeight(n)));
     const gw = maxX - minX + 100, gh = maxY - minY + 100;
     const z = Math.min(3, Math.max(0.15, Math.min(r.width / gw, r.height / gh)));
     setZoom(z);
@@ -451,6 +474,7 @@ export const NetworkView = () => {
     }
 
     if (node.type === 'quotation') {
+      const actualHeight = getNodeHeight(node);
       return (
         <g key={node.id} data-node={node.id}
           transform={`translate(${node.x},${node.y})`}
@@ -460,23 +484,21 @@ export const NetworkView = () => {
           onDoubleClick={e => handleNodeDbl(e, node.id)}
           style={{ cursor: 'grab' }}>
           {/* Glow */}
-          {sel && <rect x={-4} y={-4} width={node.width + 8} height={node.height + 8} rx={10} fill={c} opacity={0.15} />}
+          {sel && <rect x={-4} y={-4} width={node.width + 8} height={actualHeight + 8} rx={10} fill={c} opacity={0.15} />}
           {/* Card background */}
-          <rect width={node.width} height={node.height} rx={7}
+          <rect width={node.width} height={actualHeight} rx={7}
             fill="white" stroke={sel ? c : '#D0CDC9'} strokeWidth={sel ? 2 : 1.5}
             filter="drop-shadow(0 3px 10px rgba(0,0,0,0.15))" />
           {/* Left accent bar */}
-          <rect x={0} y={0} width={5} height={node.height} rx={7}
+          <rect x={0} y={0} width={5} height={actualHeight} rx={7}
             fill={c} style={{ pointerEvents: 'none' }} />
-          <rect x={0} y={node.height / 2} width={5} height={node.height / 2} rx={0}
+          <rect x={0} y={actualHeight / 2} width={5} height={actualHeight / 2} rx={0}
             fill={c} style={{ pointerEvents: 'none' }} />
           {/* Quote text */}
           <text x={14} y={16} fontSize={10.5} fontWeight={600} fill="#555" style={{ pointerEvents: 'none' }}>❝</text>
-          <foreignObject x={22} y={8} width={node.width - 30} height={node.height - 24}>
+          <foreignObject x={22} y={8} width={node.width - 30} height={actualHeight - 24}>
             <div style={{
               fontSize: '10.5px', fontWeight: 500, color: '#333', lineHeight: '1.4',
-              overflow: 'hidden', display: '-webkit-box',
-              WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
               pointerEvents: 'none', fontFamily: 'inherit',
             }}>
               {node.label}
@@ -484,7 +506,7 @@ export const NetworkView = () => {
           </foreignObject>
           {/* Sub label (doc name) */}
           {node.subLabel && (
-            <text x={14} y={node.height - 9} fontSize={9} fill={c} fontWeight={700}
+            <text x={14} y={actualHeight - 9} fontSize={9} fill={c} fontWeight={700}
               style={{ pointerEvents: 'none' }}>
               📄 {truncate(node.subLabel, 22)}
             </text>
@@ -497,7 +519,7 @@ export const NetworkView = () => {
             fill="white" stroke={c} strokeWidth={2.5}
             data-port="in" style={{ cursor: 'crosshair' }}
             onPointerDown={e => handlePortPD(e, node.id)} />
-          <circle cx={node.width / 2} cy={node.height} r={PORT_R}
+          <circle cx={node.width / 2} cy={actualHeight} r={PORT_R}
             fill={c} stroke="white" strokeWidth={2}
             data-port="out" style={{ cursor: 'crosshair' }}
             onPointerDown={e => handlePortPD(e, node.id)} />
@@ -521,6 +543,7 @@ export const NetworkView = () => {
     }
 
     // memo type
+    const actualHeight = getNodeHeight(node);
     return (
       <g key={node.id} data-node={node.id}
         transform={`translate(${node.x},${node.y})`}
@@ -529,12 +552,12 @@ export const NetworkView = () => {
         onPointerUp={handleNodePU}
         onDoubleClick={e => handleNodeDbl(e, node.id)}
         style={{ cursor: 'grab' }}>
-        {sel && <rect x={-4} y={-4} width={node.width + 8} height={node.height + 8} rx={12} fill="none" stroke={c} strokeWidth={2} opacity={0.5} />}
-        <rect width={node.width} height={node.height} rx={8}
+        {sel && <rect x={-4} y={-4} width={node.width + 8} height={actualHeight + 8} rx={12} fill="none" stroke={c} strokeWidth={2} opacity={0.5} />}
+        <rect width={node.width} height={actualHeight} rx={8}
           fill={c + '11'} stroke={sel ? c : c + '66'} strokeWidth={sel ? 2.5 : 1.5}
           strokeDasharray="6,4" filter="drop-shadow(0 4px 12px rgba(0,0,0,0.06))" />
         <rect width={node.width} height={16} rx={8} fill={c + '33'} />
-        <foreignObject x={10} y={20} width={node.width - 20} height={node.height - 30}>
+        <foreignObject x={10} y={20} width={node.width - 20} height={actualHeight - 30}>
           <div style={{
             fontSize: '11px', fontWeight: 600, color: '#444', lineHeight: '1.5',
             pointerEvents: 'none', fontFamily: 'inherit',
@@ -546,7 +569,7 @@ export const NetworkView = () => {
           fill="white" stroke={c} strokeWidth={2.5}
           data-port="in" style={{ cursor: 'crosshair' }}
           onPointerDown={e => handlePortPD(e, node.id)} />
-        <circle cx={node.width / 2} cy={node.height} r={PORT_R}
+        <circle cx={node.width / 2} cy={actualHeight} r={PORT_R}
           fill={c} stroke="white" strokeWidth={2}
           data-port="out" style={{ cursor: 'crosshair' }}
           onPointerDown={e => handlePortPD(e, node.id)} />
@@ -737,8 +760,9 @@ export const NetworkView = () => {
               const d = edgePath(a, b);
               
               // Calculate midpoint for delete button
+              const aH = getNodeHeight(a);
               const mx = (a.x + a.width/2 + b.x + b.width/2) / 2;
-              const my = (a.y + a.height + b.y) / 2;
+              const my = (a.y + aH + b.y) / 2;
 
               return (
                 <g key={ed.id} className="edge-group" data-edge="true" style={{ cursor: 'pointer' }}>

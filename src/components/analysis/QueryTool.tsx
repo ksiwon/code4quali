@@ -237,8 +237,8 @@ export const QueryTool = ({ onOpenDoc }: { onOpenDoc?: (id:string)=>void }) => {
                     <QCard key={q.id}>
                       <QCardTop>
                         <DocTag>📄 {q.documentName}</DocTag>
-                        {q.comment && !q.comment.startsWith('__group:') && (
-                          <span style={{fontSize:11,color:'var(--text-secondary)',fontStyle:'italic'}}>"{q.comment}"</span>
+                        {q.memos && q.memos.length > 0 && (
+                          <span style={{fontSize:11,color:'var(--text-secondary)',fontStyle:'italic'}}>"{q.memos[0].body}"</span>
                         )}
                         <div style={{marginLeft:'auto'}}>
                           <button

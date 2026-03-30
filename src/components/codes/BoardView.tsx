@@ -98,10 +98,9 @@ export const BoardView = ({ onOpenInViewer }: { onOpenInViewer?: (id: string) =>
   const getCodeQuotations = (codeId: string) =>
     quotations.filter(q => q.codes.includes(codeId));
 
-  const getGroupName = (quotComment: string) => {
-    if (!quotComment?.startsWith('__group:')) return null;
-    const gid = quotComment.replace('__group:', '');
-    return codeGroups.find(g => g.id === gid)?.name ?? null;
+  const getGroupName = (groupId: string | null) => {
+    if (!groupId) return null;
+    return codeGroups.find(g => g.id === groupId)?.name ?? null;
   };
 
   return (
@@ -141,7 +140,7 @@ export const BoardView = ({ onOpenInViewer }: { onOpenInViewer?: (id: string) =>
                   </div>
                 )}
                 {quots.map(q => {
-                  const groupName = getGroupName(q.comment);
+                  const groupName = getGroupName(q.groupId);
                   return (
                     <Card key={q.id} color={code.color} onClick={() => onOpenInViewer?.(q.documentId)}>
                       {groupName && <GroupBadge>{groupName}</GroupBadge>}

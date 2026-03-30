@@ -146,6 +146,15 @@ const MEMO_COLORS = ['#4A6FA5', '#61A87B', '#E07B54', '#9B59B6', '#E67E22'];
 const truncate = (s: string, n: number) => s.length > n ? s.slice(0, n - 1) + '…' : s;
 
 const getNodeHeight = (node: NVNode) => {
+  if (node.type === 'code') {
+    let lines = 1;
+    let cur = 0;
+    for (let i = 0; i < node.label.length; i++) {
+      cur += node.label.charCodeAt(i) > 255 ? 1 : 0.55;
+      if (cur > 17) { lines++; cur = 0; }
+    }
+    return Math.max(node.height, 40 + lines * 18);
+  }
   if (node.type === 'quotation') {
     let lines = 1;
     let cur = 0;
@@ -153,7 +162,7 @@ const getNodeHeight = (node: NVNode) => {
       cur += node.label.charCodeAt(i) > 255 ? 1 : 0.55;
       if (cur > 10.2) { lines++; cur = 0; }
     }
-    return Math.max(node.height, 28 + lines * 15.5 + (node.subLabel ? 14 : 0));
+    return Math.max(node.height, 22 + lines * 15.5 + (node.subLabel ? 16 : 0));
   }
   if (node.type === 'memo') {
     let lines = 1;
@@ -419,6 +428,7 @@ export const NetworkView = () => {
     const c = node.color;
 
     if (node.type === 'code') {
+      const actualHeight = getNodeHeight(node);
       return (
         <g key={node.id} data-node={node.id}
           transform={`translate(${node.x},${node.y})`}
@@ -428,21 +438,28 @@ export const NetworkView = () => {
           onDoubleClick={e => handleNodeDbl(e, node.id)}
           style={{ cursor: 'grab' }}>
           {/* Glow when selected */}
-          {sel && <rect x={-4} y={-4} width={node.width + 8} height={node.height + 8} rx={14} fill="none" stroke={c} strokeWidth={2.5} opacity={0.4} />}
+          {sel && <rect x={-4} y={-4} width={node.width + 8} height={actualHeight + 8} rx={14} fill="none" stroke={c} strokeWidth={2.5} opacity={0.4} />}
           {/* Main body — solid color */}
-          <rect width={node.width} height={node.height} rx={10}
+          <rect width={node.width} height={actualHeight} rx={10}
             fill={c} stroke={sel ? '#fff' : c} strokeWidth={sel ? 2.5 : 0}
             filter="drop-shadow(0 3px 8px rgba(0,0,0,0.25))" />
           {/* Shine line */}
           <rect x={6} y={5} width={node.width - 12} height={4} rx={2} fill="rgba(255,255,255,0.25)" />
           {/* Label */}
-          <text x={node.width / 2} y={node.height / 2} textAnchor="middle" dominantBaseline="middle"
-            fontSize={12} fontWeight={800} fill="white"
-            style={{ pointerEvents: 'none', letterSpacing: '0.2px' }}>
-            {truncate(node.label, 20)}
-          </text>
+          <foreignObject x={10} y={15} width={node.width - 20} height={actualHeight - 30}>
+            <div style={{
+              width: '100%', height: '100%',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '12px', fontWeight: 800, color: 'white',
+              lineHeight: '1.4', textAlign: 'center', letterSpacing: '0.2px',
+              fontFamily: 'inherit', pointerEvents: 'none',
+              wordBreak: 'keep-all'
+            }}>
+              {node.label}
+            </div>
+          </foreignObject>
           {/* Badge */}
-          <text x={8} y={node.height - 7} fontSize={7.5} fontWeight={700} fill="rgba(255,255,255,0.6)"
+          <text x={8} y={actualHeight - 7} fontSize={7.5} fontWeight={700} fill="rgba(255,255,255,0.6)"
             style={{ pointerEvents: 'none' }}>CODE</text>
           {/* Input port (top) */}
           <circle cx={node.width / 2} cy={0} r={PORT_R}
@@ -450,7 +467,7 @@ export const NetworkView = () => {
             data-port="in" style={{ cursor: 'crosshair' }}
             onPointerDown={e => handlePortPD(e, node.id)} />
           {/* Output port (bottom) */}
-          <circle cx={node.width / 2} cy={node.height} r={PORT_R}
+          <circle cx={node.width / 2} cy={actualHeight} r={PORT_R}
             fill={c} stroke="white" strokeWidth={2}
             data-port="out" style={{ cursor: 'crosshair' }}
             onPointerDown={e => handlePortPD(e, node.id)} />
@@ -495,8 +512,8 @@ export const NetworkView = () => {
           <rect x={0} y={actualHeight / 2} width={5} height={actualHeight / 2} rx={0}
             fill={c} style={{ pointerEvents: 'none' }} />
           {/* Quote text */}
-          <text x={14} y={16} fontSize={10.5} fontWeight={600} fill="#555" style={{ pointerEvents: 'none' }}>❝</text>
-          <foreignObject x={22} y={8} width={node.width - 30} height={actualHeight - 24}>
+          <text x={14} y={22} fontSize={10.5} fontWeight={600} fill="#555" style={{ pointerEvents: 'none' }}>❝</text>
+          <foreignObject x={22} y={14} width={node.width - 30} height={actualHeight - 30}>
             <div style={{
               fontSize: '10.5px', fontWeight: 500, color: '#333', lineHeight: '1.4',
               pointerEvents: 'none', fontFamily: 'inherit',
@@ -506,7 +523,7 @@ export const NetworkView = () => {
           </foreignObject>
           {/* Sub label (doc name) */}
           {node.subLabel && (
-            <text x={14} y={actualHeight - 9} fontSize={9} fill={c} fontWeight={700}
+            <text x={14} y={actualHeight - 11} fontSize={9} fill={c} fontWeight={700}
               style={{ pointerEvents: 'none' }}>
               📄 {truncate(node.subLabel, 22)}
             </text>

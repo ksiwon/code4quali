@@ -34,6 +34,14 @@ export interface Document {
   status: string;
 }
 
+/** Quotation 산하 개별 메모 */
+export interface QuotationMemo {
+  id: string;
+  body: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export interface Quotation {
   id: string;
   documentId: string;
@@ -43,7 +51,8 @@ export interface Quotation {
   startOffset: number;
   endOffset: number;
   codes: string[];
-  comment: string;
+  memos: QuotationMemo[];  // Quotation 산하 복수 메모 (comment 대체)
+  groupId: string | null;  // 코드 그룹 소속
   color: string;
   createdAt: number;
 }
@@ -51,10 +60,9 @@ export interface Quotation {
 export interface Code {
   id: string;
   name: string;
-  comment: string;
+  comment: string;   // 코드 설명(Description)
   color: string;
   quotationIds: string[];
-  memo?: string;
   createdAt?: number;
 }
 

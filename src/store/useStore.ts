@@ -1,20 +1,8 @@
-// ─── useStore.ts 에 추가할 sttStats 관련 코드 ───
-//
-// AppState 인터페이스에 추가:
-//   sttStats: { total: number; done: number; results: number; stage: string } | null;
-//   setSttStats: (stats: AppState['sttStats']) => void;
-//
-// 초기 state에 추가:
-//   sttStats: null,
-//
-// actions에 추가:
-//   setSttStats: (stats) => set({ sttStats: stats }),
-//
-// ──────────────────────────────────────────────
-// 아래는 패치 후 useStore.ts 전체 파일입니다.
-
 import { create } from 'zustand';
-import type { Document, Quotation, Code, CodeGroup, AnalyticMemo, AppSettings, NVNode, NVEdge } from '../types';
+import type {
+  Document, Quotation, QuotationMemo,
+  Code, CodeGroup, AnalyticMemo, AppSettings, NVNode, NVEdge,
+} from '../types';
 
 const CODE_COLORS = [
   '#E07B54','#5B8FF9','#61D9A5','#F6BD16','#E96472',
@@ -41,6 +29,52 @@ function loadSettings(): AppSettings {
     if (!raw) return DEFAULT_SETTINGS;
     return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
   } catch { return DEFAULT_SETTINGS; }
+}
+
+/**
+ * 구버전 호환 마이그레이션:
+ *   v2.0 이전: comment(string), __group: 접두어 혼용
+ *   v2.1:      comment(string) + groupId(string|null)
+ *   v3.0:      memos(QuotationMemo[]) + groupId(string|null)
+ */
+function migrateQuotations(raw: unknown[]): Quotation[] {
+  return (raw as Record<string, unknown>[]).map(q => {
+    const comment = (q.comment as string | undefined) ?? '';
+    const legacyGroup = comment.startsWith('__group:');
+
+    // groupId 결정
+    let groupId: string | null = (q.groupId as string | null) ?? null;
+    if (!groupId && legacyGroup) {
+      groupId = comment.replace('__group:', '');
+    }
+
+    // memos 결정: 이미 배열이면 그대로, 구버전 comment가 있으면 첫 메모로 변환
+    let memos: QuotationMemo[];
+    if (Array.isArray(q.memos)) {
+      memos = q.memos as QuotationMemo[];
+    } else {
+      const body = legacyGroup ? '' : comment;
+      memos = body.trim()
+        ? [{ id: crypto.randomUUID(), body, createdAt: Date.now(), updatedAt: Date.now() }]
+        : [];
+    }
+
+    const result: Quotation = {
+      id: q.id as string,
+      documentId: q.documentId as string,
+      documentName: q.documentName as string,
+      text: q.text as string,
+      rowIndex: q.rowIndex as number,
+      startOffset: q.startOffset as number,
+      endOffset: q.endOffset as number,
+      codes: (q.codes as string[]) ?? [],
+      memos,
+      groupId,
+      color: (q.color as string) ?? '#E07B54',
+      createdAt: q.createdAt as number,
+    };
+    return result;
+  });
 }
 
 interface SttStats {
@@ -80,6 +114,11 @@ interface AppState {
   updateQuotation: (id: string, updates: Partial<Quotation>) => void;
   deleteQuotation: (id: string) => void;
 
+  // Quotation Memos
+  addQuotationMemo: (quotationId: string, body: string) => QuotationMemo;
+  updateQuotationMemo: (quotationId: string, memoId: string, body: string) => void;
+  deleteQuotationMemo: (quotationId: string, memoId: string) => void;
+
   // Codes
   addCode: (name: string, comment?: string) => Code;
   updateCode: (id: string, updates: Partial<Code>) => void;
@@ -96,7 +135,7 @@ interface AppState {
   updateCodeGroup: (id: string, updates: Partial<CodeGroup>) => void;
   deleteCodeGroup: (id: string) => void;
 
-  // Memos
+  // Memos (Analytic)
   addMemo: (title: string, body?: string) => AnalyticMemo;
   updateMemo: (id: string, updates: Partial<AnalyticMemo>) => void;
   deleteMemo: (id: string) => void;
@@ -155,9 +194,44 @@ export const useStore = create<AppState>((set, get) => ({
 
   addQuotation: (q) => set(s => ({ quotations: [...s.quotations, q], isDirty: true })),
   updateQuotation: (id, updates) => set(s => ({
-    quotations: s.quotations.map(q => q.id === id ? { ...q, ...updates } : q), isDirty: true,
+    quotations: s.quotations.map(q => q.id === id ? { ...q, ...updates } : q),
+    isDirty: true,
   })),
-  deleteQuotation: (id) => set(s => ({ quotations: s.quotations.filter(q => q.id !== id), isDirty: true })),
+  deleteQuotation: (id) => set(s => ({
+    quotations: s.quotations.filter(q => q.id !== id),
+    isDirty: true,
+  })),
+
+  // ── Quotation Memo CRUD ──────────────────────────────────────────────────
+  addQuotationMemo: (quotationId, body) => {
+    const memo: QuotationMemo = {
+      id: crypto.randomUUID(), body,
+      createdAt: Date.now(), updatedAt: Date.now(),
+    };
+    set(s => ({
+      quotations: s.quotations.map(q =>
+        q.id === quotationId ? { ...q, memos: [...q.memos, memo] } : q
+      ),
+      isDirty: true,
+    }));
+    return memo;
+  },
+  updateQuotationMemo: (quotationId, memoId, body) => set(s => ({
+    quotations: s.quotations.map(q =>
+      q.id === quotationId
+        ? { ...q, memos: q.memos.map(m => m.id === memoId ? { ...m, body, updatedAt: Date.now() } : m) }
+        : q
+    ),
+    isDirty: true,
+  })),
+  deleteQuotationMemo: (quotationId, memoId) => set(s => ({
+    quotations: s.quotations.map(q =>
+      q.id === quotationId
+        ? { ...q, memos: q.memos.filter(m => m.id !== memoId) }
+        : q
+    ),
+    isDirty: true,
+  })),
 
   addCode: (name, comment = '') => {
     const code: Code = {
@@ -226,7 +300,11 @@ export const useStore = create<AppState>((set, get) => ({
   updateCodeGroup: (id, updates) => set(s => ({
     codeGroups: s.codeGroups.map(g => g.id === id ? { ...g, ...updates } : g), isDirty: true,
   })),
-  deleteCodeGroup: (id) => set(s => ({ codeGroups: s.codeGroups.filter(g => g.id !== id), isDirty: true })),
+  deleteCodeGroup: (id) => set(s => ({
+    quotations: s.quotations.map(q => q.groupId === id ? { ...q, groupId: null } : q),
+    codeGroups: s.codeGroups.filter(g => g.id !== id),
+    isDirty: true,
+  })),
 
   addMemo: (title, body = '') => {
     const memo: AnalyticMemo = {
@@ -238,7 +316,8 @@ export const useStore = create<AppState>((set, get) => ({
     return memo;
   },
   updateMemo: (id, updates) => set(s => ({
-    memos: s.memos.map(m => m.id === id ? { ...m, ...updates, updatedAt: Date.now() } : m), isDirty: true,
+    memos: s.memos.map(m => m.id === id ? { ...m, ...updates, updatedAt: Date.now() } : m),
+    isDirty: true,
   })),
   deleteMemo: (id) => set(s => ({ memos: s.memos.filter(m => m.id !== id), isDirty: true })),
 
@@ -263,18 +342,26 @@ export const useStore = create<AppState>((set, get) => ({
     isDirty: true,
   })),
   addNetworkEdge: (edge) => set(s => ({ networkEdges: [...s.networkEdges, edge], isDirty: true })),
-  deleteNetworkEdge: (id) => set(s => ({ networkEdges: s.networkEdges.filter(e => e.id !== id), isDirty: true })),
+  deleteNetworkEdge: (id) => set(s => ({
+    networkEdges: s.networkEdges.filter(e => e.id !== id),
+    isDirty: true,
+  })),
 
   saveProject: () => {
     const s = get();
     const data = {
-      version: '2.0', savedAt: Date.now(), projectName: s.projectName,
+      version: '3.0', savedAt: Date.now(), projectName: s.projectName,
       documents: s.documents, quotations: s.quotations,
       codes: s.codes, codeGroups: s.codeGroups, memos: s.memos,
       networkNodes: s.networkNodes, networkEdges: s.networkEdges,
     };
-    localStorage.setItem(LS_PROJECT, JSON.stringify(data));
-    set({ isDirty: false, lastSavedAt: Date.now() });
+    try {
+      localStorage.setItem(LS_PROJECT, JSON.stringify(data));
+      set({ isDirty: false, lastSavedAt: Date.now() });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      alert(`⚠️ 저장 실패: 브라우저 저장 공간이 부족합니다.\n프로젝트를 JSON으로 내보내기(📤)하여 백업하세요.\n\n오류: ${msg}`);
+    }
   },
   loadProject: () => {
     try {
@@ -282,11 +369,16 @@ export const useStore = create<AppState>((set, get) => ({
       if (!raw) return false;
       const data = JSON.parse(raw);
       set({
-        documents: data.documents || [], quotations: data.quotations || [],
-        codes: data.codes || [], codeGroups: data.codeGroups || [],
-        memos: data.memos || [], projectName: data.projectName || '새 프로젝트',
-        networkNodes: data.networkNodes || [], networkEdges: data.networkEdges || [],
-        isDirty: false, lastSavedAt: data.savedAt || null,
+        documents: data.documents || [],
+        quotations: migrateQuotations(data.quotations || []),
+        codes: data.codes || [],
+        codeGroups: data.codeGroups || [],
+        memos: data.memos || [],
+        projectName: data.projectName || '새 프로젝트',
+        networkNodes: data.networkNodes || [],
+        networkEdges: data.networkEdges || [],
+        isDirty: false,
+        lastSavedAt: data.savedAt || null,
       });
       return true;
     } catch { return false; }
@@ -294,7 +386,7 @@ export const useStore = create<AppState>((set, get) => ({
   exportProject: () => {
     const s = get();
     const data = {
-      version: '2.0', savedAt: Date.now(), projectName: s.projectName,
+      version: '3.0', savedAt: Date.now(), projectName: s.projectName,
       documents: s.documents, quotations: s.quotations,
       codes: s.codes, codeGroups: s.codeGroups, memos: s.memos,
       networkNodes: s.networkNodes, networkEdges: s.networkEdges,
@@ -311,11 +403,16 @@ export const useStore = create<AppState>((set, get) => ({
     try {
       const data = JSON.parse(json);
       set({
-        documents: data.documents || [], quotations: data.quotations || [],
-        codes: data.codes || [], codeGroups: data.codeGroups || [],
-        memos: data.memos || [], projectName: data.projectName || '불러온 프로젝트',
-        networkNodes: data.networkNodes || [], networkEdges: data.networkEdges || [],
-        isDirty: false, lastSavedAt: data.savedAt || null,
+        documents: data.documents || [],
+        quotations: migrateQuotations(data.quotations || []),
+        codes: data.codes || [],
+        codeGroups: data.codeGroups || [],
+        memos: data.memos || [],
+        projectName: data.projectName || '불러온 프로젝트',
+        networkNodes: data.networkNodes || [],
+        networkEdges: data.networkEdges || [],
+        isDirty: false,
+        lastSavedAt: data.savedAt || null,
       });
       colorIndex = (data.codes || []).length;
       return true;
@@ -326,17 +423,15 @@ export const useStore = create<AppState>((set, get) => ({
     colorIndex = 0;
     set({
       documents: [], quotations: [], codes: [], codeGroups: [],
-      memos: [], networkNodes: [], networkEdges: [], activeDocumentId: null, selectedCodeId: null,
+      memos: [], networkNodes: [], networkEdges: [],
+      activeDocumentId: null, selectedCodeId: null,
       projectName: '새 프로젝트', isDirty: false, lastSavedAt: null,
     });
   },
-
-  /** localStorage 전체 초기화 (프로젝트 + 설정 모두 삭제 후 리프레시) */
   clearAllData: () => {
     localStorage.removeItem(LS_PROJECT);
     localStorage.removeItem(LS_SETTINGS);
     colorIndex = 0;
-    // 리프레시는 호출부에서 직접 처리 (confirm 2회 후)
     set({
       documents: [], quotations: [], codes: [], codeGroups: [],
       memos: [], activeDocumentId: null, selectedCodeId: null,

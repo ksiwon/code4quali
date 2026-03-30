@@ -218,25 +218,31 @@ export const CodeManager = ({ onOpenInViewer }: Props) => {
   const [editDesc, setEditDesc] = useState('');
   const [newGroupName, setNewGroupName] = useState('');
 
+  // 드래그 중 클릭 이벤트 방지를 위한 플래그
+  const isDraggingRef = useRef(false);
+
   const selectedCode = codes.find(c => c.id === selectedCodeId) ?? null;
   const selectedGroups = codeGroups.filter(g => g.codeId === selectedCodeId);
 
-  // Quotations for the selected code, keyed by group
+  // Quotations for the selected code
   const selectedQuotations = useMemo(
     () => selectedCode ? quotations.filter(q => q.codes.includes(selectedCode.id)) : [],
     [selectedCode, quotations]
   );
 
-  // Group the quotations
+  // groupId 필드 기반으로 그룹화 (comment 필드 비의존)
   const groupedQuotations = useMemo(() => {
     if (!selectedCode) return [];
-    const noGroupQuots = selectedQuotations.filter(q => !q.comment?.startsWith('__group:'));
-    // Collect quotations per group (we store groupId in quotation.comment as __group:<id>)
     const result: { group: typeof selectedGroups[0] | null; quots: typeof selectedQuotations }[] = [];
     for (const g of selectedGroups) {
-      const gQuots = selectedQuotations.filter(q => q.comment === `__group:${g.id}`);
+      const gQuots = selectedQuotations.filter(q => q.groupId === g.id);
       result.push({ group: g, quots: gQuots });
     }
+    // 미분류: groupId가 null이거나 존재하지 않는 그룹을 가리키는 경우
+    const validGroupIds = new Set(selectedGroups.map(g => g.id));
+    const noGroupQuots = selectedQuotations.filter(
+      q => !q.groupId || !validGroupIds.has(q.groupId)
+    );
     result.push({ group: null, quots: noGroupQuots });
     return result;
   }, [selectedCode, selectedQuotations, selectedGroups]);
@@ -275,10 +281,9 @@ export const CodeManager = ({ onOpenInViewer }: Props) => {
     setNewGroupName('');
   };
 
-  // drag quotation to group
+  // groupId 필드로 그룹 소속 변경 (comment 필드 불변)
   const handleDropToGroup = (quotId: string, groupId: string | null) => {
-    const newComment = groupId ? `__group:${groupId}` : '';
-    useStore.getState().updateQuotation(quotId, { comment: newComment });
+    useStore.getState().updateQuotation(quotId, { groupId });
   };
 
   return (
@@ -287,17 +292,17 @@ export const CodeManager = ({ onOpenInViewer }: Props) => {
       <LeftPane>
         <PaneHeader>
           <PaneTitle>Code Manager</PaneTitle>
-          <div style={{display:'flex',gap:5}}>
+          <div style={{ display: 'flex', gap: 5 }}>
             <SmBtn variant="ghost" onClick={() => importRef.current?.click()} title="코드북 JSON 불러오기">↑ 불러오기</SmBtn>
             <SmBtn variant="accent" onClick={() => setShowModal(true)}>+ New Code</SmBtn>
           </div>
-          <input ref={importRef} type="file" accept=".json" style={{display:'none'}} onChange={async(e)=>{
-            const file=e.target.files?.[0]; if(!file) return;
-            const text=await readFileText(file);
-            const cb=parseCodebookJSON(text);
-            if(cb){ importCodes(cb.codes); alert(`✅ ${cb.codes.length}개 코드 불러오기 완료`); }
+          <input ref={importRef} type="file" accept=".json" style={{ display: 'none' }} onChange={async (e) => {
+            const file = e.target.files?.[0]; if (!file) return;
+            const text = await readFileText(file);
+            const cb = parseCodebookJSON(text);
+            if (cb) { importCodes(cb.codes); alert(`✅ ${cb.codes.length}개 코드 불러오기 완료`); }
             else alert('❌ 코드북 파일 형식 오류');
-            e.target.value='';
+            e.target.value = '';
           }} />
         </PaneHeader>
         <div style={{ padding: '10px 12px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
@@ -391,8 +396,18 @@ export const CodeManager = ({ onOpenInViewer }: Props) => {
                       key={q.id}
                       color={selectedCode.color}
                       draggable
-                      onDragStart={e => e.dataTransfer.setData('quotation-id', q.id)}
-                      onClick={() => onOpenInViewer?.(q.documentId)}
+                      onDragStart={e => {
+                        isDraggingRef.current = true;
+                        e.dataTransfer.setData('quotation-id', q.id);
+                      }}
+                      onDragEnd={() => {
+                        // 짧은 딜레이 후 플래그 해제 (dragEnd → click 순서 보장)
+                        setTimeout(() => { isDraggingRef.current = false; }, 50);
+                      }}
+                      onClick={() => {
+                        if (isDraggingRef.current) return;
+                        onOpenInViewer?.(q.documentId);
+                      }}
                     >
                       <CardText>[{selectedCode.name}] {q.text}</CardText>
                       <CardMeta>{q.documentName.replace('_최종.csv', '').replace('_최종.docx', '')}</CardMeta>
@@ -496,14 +511,14 @@ export const CodeManager = ({ onOpenInViewer }: Props) => {
       </RightPane>
 
       {/* ── Tab Exchange Bar ── */}
-      <div style={{ padding:'10px 12px', borderTop:'1px solid var(--border)', background:'var(--surface2)', flexShrink:0 }}>
-        <div style={{ fontSize:'9px', fontWeight:800, textTransform:'uppercase' as const, letterSpacing:0.5, color:'var(--text-muted)', marginBottom:6 }}>
+      <div style={{ padding: '10px 12px', borderTop: '1px solid var(--border)', background: 'var(--surface2)', flexShrink: 0 }}>
+        <div style={{ fontSize: '9px', fontWeight: 800, textTransform: 'uppercase' as const, letterSpacing: 0.5, color: 'var(--text-muted)', marginBottom: 6 }}>
           📦 내보내기 / 가져오기
         </div>
-        <div style={{ display:'flex', gap:5, flexWrap:'wrap' as const }}>
-          <SmBtn onClick={() => downloadCodebook(codes, codeGroups)} style={{ fontSize:'10px', padding:'3px 8px' }}>↓ 코드북 JSON</SmBtn>
-          <SmBtn onClick={() => downloadCodingResult(codes, quotations, codeGroups, [])} style={{ fontSize:'10px', padding:'3px 8px' }}>↓ 코딩 결과</SmBtn>
-          <SmBtn onClick={() => importRef.current?.click()} style={{ fontSize:'10px', padding:'3px 8px' }}>↑ 코드북 가져오기</SmBtn>
+        <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' as const }}>
+          <SmBtn onClick={() => downloadCodebook(codes, codeGroups)} style={{ fontSize: '10px', padding: '3px 8px' }}>↓ 코드북 JSON</SmBtn>
+          <SmBtn onClick={() => downloadCodingResult(codes, quotations, codeGroups, [])} style={{ fontSize: '10px', padding: '3px 8px' }}>↓ 코딩 결과</SmBtn>
+          <SmBtn onClick={() => importRef.current?.click()} style={{ fontSize: '10px', padding: '3px 8px' }}>↑ 코드북 가져오기</SmBtn>
         </div>
       </div>
 

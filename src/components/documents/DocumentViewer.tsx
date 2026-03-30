@@ -55,7 +55,7 @@ const Popup = styled.div<{x:number;y:number}>`
   position:fixed; left:${p=>p.x}px; top:${p=>p.y}px;
   background:white; border:1.5px solid var(--border); border-radius:12px;
   box-shadow:0 12px 40px rgba(0,0,0,0.18); padding:14px; z-index:500;
-  width:340px; max-height:70vh; overflow-y:auto;
+  width:340px; max-height:75vh; overflow-y:auto;
 `;
 const PopupTitle = styled.div`font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-muted); margin-bottom:10px;`;
 const PopupPreview = styled.div`
@@ -63,13 +63,6 @@ const PopupPreview = styled.div`
   border:1px solid var(--border); color:var(--text); line-height:1.5; margin-bottom:10px;
   font-style:italic; overflow:hidden; text-overflow:ellipsis;
   display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;
-`;
-const CommentBox = styled.textarea`
-  width:100%; border:1px solid var(--border); border-radius:7px; padding:7px 9px;
-  font-size:12px; resize:none; outline:none; min-height:54px; margin-bottom:9px;
-  background:var(--surface2); color:var(--text); font-family:inherit;
-  &:focus{border-color:var(--accent);}
-  &::placeholder{color:var(--text-muted);}
 `;
 const SearchInput = styled.input`
   width:100%; border:1px solid var(--border); border-radius:7px; padding:6px 9px;
@@ -104,6 +97,33 @@ const PopBtn = styled.button<{v?:'accent'|'danger'|'ghost'}>`
 `;
 const ActionRow = styled.div`display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:9px;`;
 
+/* ── Memo Section ── */
+const MemoSection = styled.div`
+  border-top:1px solid var(--border); margin-top:10px; padding-top:10px;
+`;
+const MemoSectionTitle = styled.div`
+  font-size:10px; font-weight:800; color:var(--text-muted);
+  text-transform:uppercase; letter-spacing:0.5px; margin-bottom:8px;
+`;
+const MemoItem = styled.div`
+  background:var(--surface2); border:1px solid var(--border); border-radius:7px;
+  padding:7px 9px; margin-bottom:6px;
+`;
+const MemoBody = styled.div`font-size:12px; color:var(--text); line-height:1.5; white-space:pre-wrap;`;
+const MemoMeta = styled.div`font-size:10px; color:var(--text-muted); margin-top:4px; display:flex; justify-content:space-between;`;
+const MemoEditArea = styled.textarea`
+  width:100%; border:1px solid var(--border); border-radius:7px; padding:7px 9px;
+  font-size:12px; resize:none; outline:none; min-height:54px;
+  background:var(--surface2); color:var(--text); font-family:inherit; line-height:1.5;
+  &:focus{border-color:var(--accent);}
+  &::placeholder{color:var(--text-muted);}
+`;
+const MemoAddRow = styled.div`display:flex; gap:6px; margin-top:6px;`;
+const IconBtn = styled.button`
+  font-size:10px; color:var(--text-muted); background:none; border:none; cursor:pointer; padding:2px 4px;
+  &:hover{color:var(--accent);}
+`;
+
 /* ── AI Suggest ── */
 const AiBox = styled.div`
   border:1.5px solid var(--accent); border-radius:9px; padding:10px 12px; margin:9px 0;
@@ -134,18 +154,23 @@ interface Sel {
 export const DocumentViewer: React.FC = () => {
   const {
     documents, activeDocumentId, quotations, codes,
-    addQuotation, updateQuotation, deleteQuotation,
+    addQuotation, deleteQuotation,
     addCode, assignCodeToQuotation, removeCodeFromQuotation,
+    addQuotationMemo, updateQuotationMemo, deleteQuotationMemo,
     settings,
   } = useStore();
 
   const [sel, setSel] = useState<Sel|null>(null);
   const [editingQId, setEditingQId] = useState<string|null>(null);
-  const [comment, setComment] = useState('');
   const [codeSearch, setCodeSearch] = useState('');
   const [newCodeName, setNewCodeName] = useState('');
   const [aiSuggestions, setAiSuggestions] = useState<{name:string;reason:string}[]>([]);
   const [aiLoading, setAiLoading] = useState(false);
+  // 메모 입력 상태
+  const [newMemoBody, setNewMemoBody] = useState('');
+  const [editingMemoId, setEditingMemoId] = useState<string|null>(null);
+  const [editingMemoBody, setEditingMemoBody] = useState('');
+
   const menuRef = useRef<HTMLDivElement>(null);
   const quotationCounter = useRef(0);
 
@@ -207,15 +232,20 @@ ${existingCodes || '(없음)'}
     const text = s.toString().trim();
     const range = s.getRangeAt(0);
     const rect = range.getBoundingClientRect();
+
+    // DOM Range 기반 offset 계산
     const container = e.currentTarget as HTMLElement;
-    const cText = container.textContent || '';
-    const startOffset = Math.max(0, cText.indexOf(text));
+    const preRange = document.createRange();
+    preRange.selectNodeContents(container);
+    preRange.setEnd(range.startContainer, range.startOffset);
+    const startOffset = preRange.toString().length;
+
     setSel({
       text, rowIndex, startOffset, endOffset: startOffset + text.length,
       x: Math.min(rect.left + 10, window.innerWidth - 360),
       y: Math.min(rect.bottom + 8, window.innerHeight - 300),
     });
-    setComment(''); setNewCodeName(''); setCodeSearch(''); setEditingQId(null);
+    setNewCodeName(''); setCodeSearch(''); setEditingQId(null);
     setAiSuggestions([]);
     if (settings.geminiApiKey) fetchAiSuggestions(text);
   }, [settings.geminiApiKey, fetchAiSuggestions]);
@@ -228,7 +258,8 @@ ${existingCodes || '(없음)'}
       documentId: doc.id, documentName: doc.name,
       text: sel.text, rowIndex: sel.rowIndex,
       startOffset: sel.startOffset, endOffset: sel.endOffset,
-      codes: [], comment, color: '#E07B54', createdAt: ++quotationCounter.current,
+      codes: [], memos: [], groupId: null,
+      color: '#E07B54', createdAt: ++quotationCounter.current,
     };
     addQuotation(newQ);
     setEditingQId(newQ.id);
@@ -237,11 +268,12 @@ ${existingCodes || '(없음)'}
   };
 
   const handleDone = useCallback(() => {
-    if (editingQId) updateQuotation(editingQId, { comment });
     setSel(null); setEditingQId(null);
-    setComment(''); setNewCodeName(''); setCodeSearch('');
-    setAiSuggestions([]); window.getSelection()?.removeAllRanges();
-  }, [editingQId, comment, updateQuotation]);
+    setNewCodeName(''); setCodeSearch('');
+    setNewMemoBody(''); setEditingMemoId(null); setEditingMemoBody('');
+    setAiSuggestions([]);
+    window.getSelection()?.removeAllRanges();
+  }, []);
 
   const handleAddNewCode = () => {
     if (!newCodeName.trim() || !editingQId) return;
@@ -259,6 +291,19 @@ ${existingCodes || '(없음)'}
     setAiSuggestions(prev => prev.filter(s => s.name !== name));
   };
 
+  /* ── memo handlers ── */
+  const handleAddMemo = () => {
+    if (!newMemoBody.trim() || !editingQId) return;
+    addQuotationMemo(editingQId, newMemoBody.trim());
+    setNewMemoBody('');
+  };
+
+  const handleSaveMemoEdit = () => {
+    if (!editingMemoId || !editingQId) return;
+    updateQuotationMemo(editingQId, editingMemoId, editingMemoBody);
+    setEditingMemoId(null); setEditingMemoBody('');
+  };
+
   /* ── click outside close ── */
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -268,34 +313,44 @@ ${existingCodes || '(없음)'}
     return () => document.removeEventListener('mousedown', handler);
   }, [sel, editingQId, handleDone]);
 
-  /* ── render highlighted text ── */
+  /* ── render highlighted text (offset 기반) ── */
   const renderContent = (content: string, rowIndex: number) => {
-    const rowQs = docQuotations.filter(q => q.rowIndex === rowIndex);
+    const rowQs = docQuotations
+      .filter(q => q.rowIndex === rowIndex)
+      .sort((a, b) => a.startOffset - b.startOffset || b.endOffset - a.endOffset);
+
     if (!rowQs.length) return content;
+
     const result: React.ReactNode[] = [];
-    let remaining = content;
+    let cursor = 0;
+
     for (const q of rowQs) {
-      const idx = remaining.indexOf(q.text);
-      if (idx < 0) continue;
+      const start = q.startOffset;
+      const end = q.endOffset;
+      if (start < cursor) continue;
+      if (start > content.length || end > content.length) continue;
+
       const codeColor = q.codes.length
         ? (codes.find(c => c.id === q.codes[0])?.color || '#E07B54')
         : '#E07B54';
-      if (idx > 0) result.push(remaining.slice(0, idx));
+
+      if (start > cursor) result.push(content.slice(cursor, start));
       result.push(
         <Mark key={q.id} color={codeColor} active={q.id === editingQId}
           onClick={e => {
             e.stopPropagation();
-            setEditingQId(q.id); setComment(q.comment);
+            setEditingQId(q.id);
+            setNewMemoBody(''); setEditingMemoId(null); setEditingMemoBody('');
             const rect = (e.target as HTMLElement).getBoundingClientRect();
             setSel({ text: q.text, rowIndex, startOffset: q.startOffset, endOffset: q.endOffset,
               x: Math.min(rect.left, window.innerWidth - 360), y: rect.bottom + 6 });
             if (settings.geminiApiKey && !aiSuggestions.length) fetchAiSuggestions(q.text);
           }}
-        >{q.text}</Mark>
+        >{content.slice(start, end)}</Mark>
       );
-      remaining = remaining.slice(idx + q.text.length);
+      cursor = end;
     }
-    result.push(remaining);
+    if (cursor < content.length) result.push(content.slice(cursor));
     return result;
   };
 
@@ -365,7 +420,8 @@ ${existingCodes || '(없음)'}
                     <QTag key={q.id} color={codeColor} active={q.id===editingQId}
                       onClick={e=>{
                         e.stopPropagation();
-                        setEditingQId(q.id); setComment(q.comment);
+                        setEditingQId(q.id);
+                        setNewMemoBody(''); setEditingMemoId(null); setEditingMemoBody('');
                         const rect=(e.target as HTMLElement).getBoundingClientRect();
                         setSel({text:q.text,rowIndex:q.rowIndex,startOffset:q.startOffset,endOffset:q.endOffset,
                           x:Math.max(50,rect.left-360),y:rect.top});
@@ -374,7 +430,7 @@ ${existingCodes || '(없음)'}
                       <QTagText title={codeName||q.text}>{codeName||q.text.slice(0,28)+(q.text.length>28?'…':'')}</QTagText>
                       {codeName && <QTagCode color={codeColor}>{q.text.slice(0,22)+(q.text.length>22?'…':'')}</QTagCode>}
                       <div style={{fontSize:10,color:'var(--text-muted)',marginTop:2}}>
-                        {q.codes.length}개 코드
+                        {q.codes.length}개 코드 · 메모 {q.memos.length}개
                       </div>
                     </QTag>
                   );
@@ -389,20 +445,20 @@ ${existingCodes || '(없음)'}
       {sel && (
         <Popup ref={menuRef} x={sel.x} y={sel.y}>
           {!editingQId ? (
+            /* ── 새 Quotation 생성 단계 ── */
             <>
               <PopupTitle>Quotation 생성</PopupTitle>
               <PopupPreview>"{sel.text}"</PopupPreview>
-              <CommentBox placeholder="메모 / 코멘트 추가..." value={comment} onChange={e=>setComment(e.target.value)} />
               <ActionRow>
                 <PopBtn v="accent" onClick={handleCreate}>✚ Quotation 생성</PopBtn>
                 <PopBtn v="ghost" onClick={handleDone}>취소</PopBtn>
               </ActionRow>
             </>
           ) : (
+            /* ── 코드 연결 + 메모 단계 ── */
             <>
               <PopupTitle>코드 연결</PopupTitle>
               <PopupPreview>"{currentQ?.text}"</PopupPreview>
-              <CommentBox placeholder="분석 메모..." value={comment} onChange={e=>setComment(e.target.value)} />
 
               {/* AI Suggestions */}
               {(aiLoading || aiSuggestions.length > 0) && (
@@ -430,7 +486,7 @@ ${existingCodes || '(없음)'}
               )}
 
               <SearchInput placeholder="코드 검색..." value={codeSearch} onChange={e=>setCodeSearch(e.target.value)} />
-              <div style={{maxHeight:160,overflowY:'auto',marginBottom:7}}>
+              <div style={{maxHeight:140,overflowY:'auto',marginBottom:7}}>
                 {filteredCodes.map(code => {
                   const isOn = currentQ?.codes.includes(code.id)||false;
                   return (
@@ -450,7 +506,58 @@ ${existingCodes || '(없음)'}
                   onKeyDown={e=>{if(e.key==='Enter')handleAddNewCode();}} />
                 <PopBtn v="accent" onClick={handleAddNewCode}>+</PopBtn>
               </NewCodeRow>
-              <ActionRow>
+
+              {/* ── 메모 섹션 ── */}
+              <MemoSection>
+                <MemoSectionTitle>📝 메모 ({currentQ?.memos.length ?? 0})</MemoSectionTitle>
+
+                {/* 기존 메모 목록 */}
+                {currentQ?.memos.map(m => (
+                  <MemoItem key={m.id}>
+                    {editingMemoId === m.id ? (
+                      <>
+                        <MemoEditArea
+                          value={editingMemoBody}
+                          onChange={e=>setEditingMemoBody(e.target.value)}
+                          onKeyDown={e=>{if(e.key==='Enter'&&e.metaKey)handleSaveMemoEdit();}}
+                          autoFocus
+                        />
+                        <div style={{display:'flex',gap:5,marginTop:5}}>
+                          <PopBtn v="accent" style={{fontSize:10,padding:'3px 8px'}} onClick={handleSaveMemoEdit}>저장</PopBtn>
+                          <PopBtn v="ghost" style={{fontSize:10,padding:'3px 8px'}} onClick={()=>{setEditingMemoId(null);setEditingMemoBody('');}}>취소</PopBtn>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <MemoBody>{m.body}</MemoBody>
+                        <MemoMeta>
+                          <span>{new Date(m.updatedAt).toLocaleDateString('ko-KR',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}</span>
+                          <span>
+                            <IconBtn onClick={()=>{setEditingMemoId(m.id);setEditingMemoBody(m.body);}}>✏️</IconBtn>
+                            <IconBtn onClick={()=>editingQId&&deleteQuotationMemo(editingQId,m.id)}>🗑</IconBtn>
+                          </span>
+                        </MemoMeta>
+                      </>
+                    )}
+                  </MemoItem>
+                ))}
+
+                {/* 새 메모 입력 */}
+                <MemoAddRow>
+                  <MemoEditArea
+                    placeholder="메모 추가... (Cmd+Enter로 저장)"
+                    value={newMemoBody}
+                    onChange={e=>setNewMemoBody(e.target.value)}
+                    onKeyDown={e=>{if(e.key==='Enter'&&e.metaKey)handleAddMemo();}}
+                    style={{flex:1}}
+                  />
+                </MemoAddRow>
+                <div style={{display:'flex',justifyContent:'flex-end',marginTop:4}}>
+                  <PopBtn v="accent" style={{fontSize:10,padding:'3px 8px'}} onClick={handleAddMemo}>+ 메모 추가</PopBtn>
+                </div>
+              </MemoSection>
+
+              <ActionRow style={{marginTop:12}}>
                 <PopBtn v="accent" onClick={handleDone}>✓ 완료</PopBtn>
                 <PopBtn v="danger" onClick={()=>{deleteQuotation(editingQId!);handleDone();}}>삭제</PopBtn>
                 <PopBtn v="ghost" onClick={handleDone}>닫기</PopBtn>

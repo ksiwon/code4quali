@@ -1,7 +1,7 @@
 /**
  * Tab Exchange Utilities
  * 각 탭의 결과를 표준화된 포맷으로 내보내고 다음 탭에서 불러올 수 있게 합니다.
- * 
+ *
  * 파이프라인:
  *   [STT → .qualcsv]  →  [Docs → .qualproject]  →  [Codes/Board → .qualcodes]  →  [XLSX 최종]
  */
@@ -42,10 +42,15 @@ export function downloadFullProject(
   codeGroups: CodeGroup[], memos: AnalyticMemo[], projectName: string
 ) {
   const data = {
-    version: '2.0', type: 'project', savedAt: Date.now(), projectName,
+    version: '3.0', type: 'project', savedAt: Date.now(), projectName,
     documents, codes, quotations, codeGroups, memos,
   };
   downloadText(JSON.stringify(data, null, 2), `${projectName}_${today()}.qualcoder.json`, 'application/json');
+}
+
+/** Quotation의 memos를 세미콜론으로 이어 붙인 단일 문자열로 반환 (XLSX/CSV 출력용) */
+function joinMemos(q: Quotation): string {
+  return q.memos.map(m => m.body).filter(Boolean).join(' ; ');
 }
 
 /* ── XLSX 최종 내보내기 ── */
@@ -70,7 +75,7 @@ export function downloadXLSX(codes: Code[], quotations: Quotation[], documents: 
         row?.time || '',
         q.text,
         q.codes.map(cid => codes.find(c => c.id === cid)?.name || cid).join('; '),
-        q.comment.startsWith('__group:') ? '' : q.comment,
+        joinMemos(q),
       ];
     })
   ];
@@ -82,7 +87,7 @@ export function downloadXLSX(codes: Code[], quotations: Quotation[], documents: 
     for (const qid of code.quotationIds) {
       const q = quotations.find(q => q.id === qid);
       if (!q) continue;
-      mapData.push([code.name, q.documentName, q.text, q.comment.startsWith('__group:')?'':q.comment]);
+      mapData.push([code.name, q.documentName, q.text, joinMemos(q)]);
     }
   }
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(mapData), 'code-quotation');
@@ -102,9 +107,15 @@ export function parseCodebookJSON(json: string): { codes: Partial<Code>[]; codeG
     if (data.type === 'codebook' || data.codes) {
       return { codes: data.codes || [], codeGroups: data.codeGroups || [] };
     }
-    // Try MEDial-codes.xlsx style: array of {name, comment}
+    // MEDial-codes.xlsx style: array of {name, comment}
     if (Array.isArray(data)) {
-      return { codes: data.map((d: Record<string, unknown>) => ({ name: String(d.name || d['name'] || ''), comment: String(d.comment || d['comment'] || '') })), codeGroups: [] };
+      return {
+        codes: data.map((d: Record<string, unknown>) => ({
+          name: String(d.name || d['name'] || ''),
+          comment: String(d.comment || d['comment'] || ''),
+        })),
+        codeGroups: [],
+      };
     }
     return null;
   } catch { return null; }
@@ -119,7 +130,6 @@ export function parseTranscriptCSV(text: string): { time: string; speaker: strin
     const trimmed = line.trim();
     if (!trimmed) continue;
     if (!headerSkipped && trimmed.includes('시간') && trimmed.includes('화자')) { headerSkipped = true; continue; }
-    // Simple CSV parse
     const m = trimmed.match(/^([^,]*),([^,]*),"?(.*?)"?$/);
     if (m) rows.push({ time: m[1].trim(), speaker: m[2].trim(), content: m[3].replace(/""/g, '"').trim() });
   }
@@ -141,14 +151,15 @@ export function downloadQueryCSV(results: Quotation[], filename: string) {
   const header = '문서,텍스트,코드들,메모\n';
   const body = results.map(q => {
     const codesStr = q.codes.join('; ');
-    return `"${q.documentName.replace(/"/g,'""')}","${q.text.replace(/"/g,'""')}","${codesStr.replace(/"/g,'""')}","${(q.comment||'').replace(/"/g,'""')}"`;
+    const memosStr = joinMemos(q);
+    return `"${q.documentName.replace(/"/g,'""')}","${q.text.replace(/"/g,'""')}","${codesStr.replace(/"/g,'""')}","${memosStr.replace(/"/g,'""')}"`;
   }).join('\n');
   downloadText('\uFEFF' + header + body, filename, 'text/csv');
 }
 
 /** ── 행렬 결과 CSV 다운로드 ── */
 export function downloadMatrixCSV(matrix: string[][], filename: string) {
-  const body = matrix.map(row => 
+  const body = matrix.map(row =>
     row.map(cell => `"${String(cell).replace(/"/g,'""')}"`).join(',')
   ).join('\n');
   downloadText('\uFEFF' + body, filename, 'text/csv');

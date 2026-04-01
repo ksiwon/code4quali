@@ -210,7 +210,10 @@ export const NetworkView = () => {
     addNetworkEdge, deleteNetworkEdge, setNetworkData,
   } = useStore();
 
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const selectedIdsRef = useRef(selectedIds);
+  useEffect(() => { selectedIdsRef.current = selectedIds; }, [selectedIds]);
+
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [draftEdge, setDraftEdge] = useState<DraftEdge | null>(null);
@@ -223,7 +226,7 @@ export const NetworkView = () => {
   // Refs to avoid stale closures in pointer handlers
   const canvasWrapRef = useRef<HTMLDivElement>(null);
   const nodeDrag = useRef<{
-    nodeId: string; startPX: number; startPY: number; startNX: number; startNY: number;
+    startPX: number; startPY: number; nodes: { id: string; startNX: number; startNY: number }[];
   } | null>(null);
   const panDrag = useRef<{ startPX: number; startPY: number; startPanX: number; startPanY: number } | null>(null);
   const portDrag = useRef<{ fromId: string } | null>(null);
@@ -265,15 +268,15 @@ export const NetworkView = () => {
     const h = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement).tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) {
-        deleteNetworkNode(selectedId);
-        setSelectedId(null);
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.length > 0) {
+        selectedIds.forEach(id => deleteNetworkNode(id));
+        setSelectedIds([]);
       }
-      if (e.key === 'Escape') { setSelectedId(null); setDraftEdge(null); portDrag.current = null; }
+      if (e.key === 'Escape') { setSelectedIds([]); setDraftEdge(null); portDrag.current = null; }
     };
     window.addEventListener('keydown', h);
     return () => window.removeEventListener('keydown', h);
-  }, [selectedId, deleteNetworkNode]);
+  }, [selectedIds, deleteNetworkNode]);
 
   // ─── Drop onto canvas ────────────────────────────────────────────────────
   const handleDrop = useCallback((e: React.DragEvent) => {
@@ -340,17 +343,38 @@ export const NetworkView = () => {
     if ((e.target as SVGElement).dataset.del) return;
     e.stopPropagation();
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
-    const node = nodesRef.current.find(n => n.id === nodeId)!;
-    nodeDrag.current = { nodeId, startPX: e.clientX, startPY: e.clientY, startNX: node.x, startNY: node.y };
-    setSelectedId(prev => prev === nodeId ? nodeId : nodeId);
+
+    let newSel = selectedIdsRef.current;
+    if (e.shiftKey) {
+      if (newSel.includes(nodeId)) {
+        newSel = newSel.filter(id => id !== nodeId);
+      } else {
+        newSel = [...newSel, nodeId];
+      }
+    } else {
+      if (!newSel.includes(nodeId)) {
+        newSel = [nodeId];
+      }
+    }
+    setSelectedIds(newSel);
+
+    const activeIds = newSel.length > 0 ? newSel : [nodeId];
+    const draggingNodes = nodesRef.current
+      .filter(n => activeIds.includes(n.id))
+      .map(n => ({ id: n.id, startNX: n.x, startNY: n.y }));
+
+    nodeDrag.current = { startPX: e.clientX, startPY: e.clientY, nodes: draggingNodes };
   }, []);
 
   const handleNodePM = useCallback((e: React.PointerEvent) => {
     if (!nodeDrag.current) return;
-    const { nodeId, startPX, startPY, startNX, startNY } = nodeDrag.current;
+    const { startPX, startPY, nodes } = nodeDrag.current;
     const dx = (e.clientX - startPX) / zoomRef.current;
     const dy = (e.clientY - startPY) / zoomRef.current;
-    updateNetworkNode(nodeId, { x: startNX + dx, y: startNY + dy });
+    
+    nodes.forEach(dn => {
+      updateNetworkNode(dn.id, { x: dn.startNX + dx, y: dn.startNY + dy });
+    });
   }, [updateNetworkNode]);
 
   const handleNodePU = useCallback(() => { nodeDrag.current = null; }, []);
@@ -363,7 +387,7 @@ export const NetworkView = () => {
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
     panDrag.current = { startPX: e.clientX, startPY: e.clientY, startPanX: panRef.current.x, startPanY: panRef.current.y };
     setIsPanning(true);
-    setSelectedId(null);
+    setSelectedIds([]);
   }, []);
 
   const handleSvgPM = useCallback((e: React.PointerEvent<SVGSVGElement>) => {
@@ -459,7 +483,7 @@ export const NetworkView = () => {
 
   // ─── Node render helper ────────────────────────────────────────────────────
   const renderNode = (node: NVNode) => {
-    const sel = selectedId === node.id;
+    const sel = selectedIds.includes(node.id);
     const c = node.color;
 
     // ── CODE ──
@@ -866,7 +890,7 @@ export const NetworkView = () => {
           <TBtn $danger onClick={() => {
             if (!nodes.length) return;
             if (window.confirm('캔버스를 모두 지우시겠습니까?')) {
-              setNetworkData([], []); setSelectedId(null);
+              setNetworkData([], []); setSelectedIds([]);
             }
           }}>지우기</TBtn>
         </Toolbar>

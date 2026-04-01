@@ -1,7 +1,7 @@
 import { useRef, useEffect } from 'react';
 import styled from 'styled-components';
 import { useStore } from '../../store/useStore';
-import { downloadXLSX, downloadFullProject, readFileText } from '../../utils/tabExchange';
+import { downloadXLSX, readFileText } from '../../utils/tabExchange';
 
 const Bar = styled.div`
   height: var(--header-h); background: var(--surface); border-bottom: 1px solid var(--border);
@@ -88,10 +88,9 @@ const SttSection = ({ sttStats }: {
 export const TopBar = () => {
   const {
     documents, quotations, codes, memos,
-    isDirty, saveProject,
+    isDirty, saveProject, exportProject,
     importProjectData,
     projectName, setProjectName,
-    codeGroups,
     activeView,
     sttStats,
   } = useStore();
@@ -150,7 +149,7 @@ export const TopBar = () => {
           <SaveDot dirty={isDirty}>{isDirty ? '● 미저장' : '✓ 저장됨'}</SaveDot>
           <Btn v="ghost" onClick={saveProject}>💾 저장</Btn>
           <Btn v="ghost" onClick={() => importRef.current?.click()}>📥 가져오기</Btn>
-          <Btn v="ghost" onClick={() => downloadFullProject(documents, codes, quotations, codeGroups, memos, projectName)}>
+          <Btn v="ghost" onClick={exportProject}>
             📤 내보내기
           </Btn>
           <Btn v="dark" onClick={() => downloadXLSX(codes, quotations, documents)}>↓ XLSX</Btn>

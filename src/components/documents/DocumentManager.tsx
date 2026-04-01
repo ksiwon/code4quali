@@ -2,7 +2,7 @@ import { useRef } from 'react';
 import styled from 'styled-components';
 import { useStore } from '../../store/useStore';
 import { parseFile } from '../../utils/fileParser';
-import { downloadFullProject, parseCodebookJSON, readFileText } from '../../utils/tabExchange';
+import { parseCodebookJSON, readFileText } from '../../utils/tabExchange';
 
 const Wrap = styled.div`flex:1; display:flex; flex-direction:column; overflow:hidden; background:var(--surface);`;
 const Header = styled.div`padding:12px 14px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; flex-shrink:0;`;
@@ -49,8 +49,7 @@ const ExchangeRow = styled.div`display:flex; gap:6px; flex-wrap:wrap;`;
 export const DocumentManager = () => {
   const {
     documents, activeDocumentId, addDocument, setActiveDocument,
-    codes, quotations, memos, codeGroups, projectName,
-    importCodes, importProjectData,
+    importCodes, importProjectData, exportProject,
   } = useStore();
   const inputRef = useRef<HTMLInputElement>(null);
   const codeImportRef = useRef<HTMLInputElement>(null);
@@ -154,7 +153,7 @@ export const DocumentManager = () => {
       <ExchangeBar>
         <ExchangeTitle>📦 탭 간 연동 (다운로드 / 불러오기)</ExchangeTitle>
         <ExchangeRow>
-          <Btn v="small" onClick={() => downloadFullProject(documents, codes, quotations, codeGroups, memos, projectName)}>
+          <Btn v="small" onClick={exportProject}>
             ↓ 프로젝트 저장
           </Btn>
           <Btn v="small" onClick={() => projectImportRef.current?.click()}>

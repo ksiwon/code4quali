@@ -36,17 +36,7 @@ export function downloadCodingResult(
   downloadText(JSON.stringify(data, null, 2), `coding_result_${today()}.json`, 'application/json');
 }
 
-/* ── 전체 프로젝트 내보내기 ── */
-export function downloadFullProject(
-  documents: Document[], codes: Code[], quotations: Quotation[],
-  codeGroups: CodeGroup[], memos: AnalyticMemo[], projectName: string
-) {
-  const data = {
-    version: '3.0', type: 'project', savedAt: Date.now(), projectName,
-    documents, codes, quotations, codeGroups, memos,
-  };
-  downloadText(JSON.stringify(data, null, 2), `${projectName}_${today()}.qualcoder.json`, 'application/json');
-}
+
 
 /** Quotation의 memos를 세미콜론으로 이어 붙인 단일 문자열로 반환 (XLSX/CSV 출력용) */
 function joinMemos(q: Quotation): string {

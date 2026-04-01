@@ -350,7 +350,7 @@ export const useStore = create<AppState>((set, get) => ({
   saveProject: () => {
     const s = get();
     const data = {
-      version: '3.0', savedAt: Date.now(), projectName: s.projectName,
+      version: '3.0', type: 'project', savedAt: Date.now(), projectName: s.projectName,
       documents: s.documents, quotations: s.quotations,
       codes: s.codes, codeGroups: s.codeGroups, memos: s.memos,
       networkNodes: s.networkNodes, networkEdges: s.networkEdges,
@@ -386,7 +386,7 @@ export const useStore = create<AppState>((set, get) => ({
   exportProject: () => {
     const s = get();
     const data = {
-      version: '3.0', savedAt: Date.now(), projectName: s.projectName,
+      version: '3.0', type: 'project', savedAt: Date.now(), projectName: s.projectName,
       documents: s.documents, quotations: s.quotations,
       codes: s.codes, codeGroups: s.codeGroups, memos: s.memos,
       networkNodes: s.networkNodes, networkEdges: s.networkEdges,

@@ -12,8 +12,8 @@ const CODE_COLORS = [
 let colorIndex = 0;
 const getNextColor = () => CODE_COLORS[colorIndex++ % CODE_COLORS.length];
 
-const LS_PROJECT  = 'qualcoder_project_v2';
-const LS_SETTINGS = 'qualcoder_settings_v1';
+const LS_PROJECT  = 'code4quali_project_v2';
+const LS_SETTINGS = 'code4quali_settings_v1';
 
 const DEFAULT_SETTINGS: AppSettings = {
   geminiApiKey: '',
@@ -395,7 +395,7 @@ export const useStore = create<AppState>((set, get) => ({
     const blob = new Blob([json], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = `${s.projectName}_${new Date().toISOString().slice(0, 10)}.qualcoder.json`;
+    a.download = `${s.projectName}_${new Date().toISOString().slice(0, 10)}.code4quali.json`;
     a.click();
     return json;
   },

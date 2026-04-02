@@ -7,9 +7,11 @@ const SidebarWrap = styled.div`
   padding:8px 0; gap:1px; flex-shrink:0; z-index:10;
 `;
 const Logo = styled.div`
-  width:30px; height:30px; background:var(--accent); border-radius:7px;
-  display:flex; align-items:center; justify-content:center;
-  font-weight:900; font-size:14px; color:white; margin-bottom:6px;
+  width: 34px; height: 34px; background: #1A1A1E; border: 1px solid #333;
+  border-radius: 8px; display: flex; align-items: center; justify-content: center;
+  font-weight: 900; font-size: 10px; color: white; margin-bottom: 8px;
+  box-shadow: inset 0 0 10px rgba(255,255,255,0.05);
+  span { color: var(--accent); }
 `;
 const IBtn = styled.button<{active?:boolean}>`
   width:44px; height:44px; border-radius:8px; position:relative;
@@ -50,7 +52,7 @@ export const Sidebar = () => {
 
   return (
     <SidebarWrap>
-      <Logo>Q</Logo>
+      <Logo>C<span>4</span>Q</Logo>
 
       {NAV_TOP.map(n=>(
         <IBtn key={n.id} active={activeView===n.id} onClick={()=>setActiveView(n.id)} title={n.label}>

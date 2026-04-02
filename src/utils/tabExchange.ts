@@ -87,7 +87,7 @@ export function downloadXLSX(codes: Code[], quotations: Quotation[], documents: 
   for (const d of documents) statData.push([d.name, d.rows.length, d.codes, d.quotations, d.status]);
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(statData), 'documents');
 
-  XLSX.writeFile(wb, `qualcoder_export_${today()}.xlsx`);
+  XLSX.writeFile(wb, `code4quali_export_${today()}.xlsx`);
 }
 
 /* ── 코드북 JSON 파싱 ── */

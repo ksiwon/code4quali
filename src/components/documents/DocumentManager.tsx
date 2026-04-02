@@ -58,7 +58,7 @@ export const DocumentManager = () => {
   const handleFiles = async (files: FileList | null) => {
     if (!files) return;
     for (const file of Array.from(files)) {
-      if (file.name.endsWith('.json') || file.name.endsWith('.qualcoder')) {
+      if (file.name.endsWith('.json') || file.name.endsWith('.code4quali')) {
         const text = await readFileText(file);
         try {
           const payload = JSON.parse(text);
@@ -116,7 +116,7 @@ export const DocumentManager = () => {
       <Header>
         <Title>Document Manager</Title>
         <Btn v="accent" onClick={() => inputRef.current?.click()}>+ 추가</Btn>
-        <input ref={inputRef} type="file" accept=".csv,.docx,.txt,.json,.qualcoder" multiple style={{display:'none'}} onChange={e=>handleFiles(e.target.files)} />
+        <input ref={inputRef} type="file" accept=".csv,.docx,.txt,.json,.code4quali" multiple style={{display:'none'}} onChange={e=>handleFiles(e.target.files)} />
       </Header>
 
       <DropZone
@@ -164,7 +164,7 @@ export const DocumentManager = () => {
           </Btn>
         </ExchangeRow>
         <input ref={codeImportRef} type="file" accept=".json" style={{display:'none'}} onChange={handleCodeImport} />
-        <input ref={projectImportRef} type="file" accept=".json,.qualcoder" style={{display:'none'}} onChange={handleProjectImport} />
+        <input ref={projectImportRef} type="file" accept=".json,.code4quali" style={{display:'none'}} onChange={handleProjectImport} />
       </ExchangeBar>
     </Wrap>
   );

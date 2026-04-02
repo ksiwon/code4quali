@@ -8,9 +8,14 @@ const Bar = styled.div`
   display: flex; align-items: center; padding: 0 12px; gap: 6px; flex-shrink: 0; z-index: 5;
 `;
 const AppName = styled.div`
-  font-size: 14px; font-weight: 900; color: var(--text); letter-spacing: -0.5px;
-  display: flex; align-items: center; gap: 6px; margin-right: 6px;
-  span { color: var(--accent); }
+  display: flex; align-items: center; gap: 8px; margin-right: 12px;
+  cursor: pointer;
+  &:hover { opacity: 0.8; }
+`;
+const Brand = styled.div`
+  font-size: 16px; font-weight: 800; color: var(--text); letter-spacing: -0.8px;
+  display: flex; align-items: center;
+  span { color: var(--accent); font-weight: 900; margin: 0 1px; }
 `;
 const Pill = styled.div`
   font-size: 9px; font-weight: 800; background: var(--accent-light); color: var(--accent);
@@ -119,7 +124,10 @@ export const TopBar = () => {
   return (
     <Bar>
       {/* 앱 로고 — 항상 표시 */}
-      <AppName><span>Q</span>ualCoder<Pill>{isSTT ? 'STT' : 'BETA'}</Pill></AppName>
+      <AppName onClick={() => useStore.getState().setActiveView('documents')}>
+        <Brand>Code<span>4</span>Quali</Brand>
+        <Pill>{isSTT ? 'STT' : 'BETA'}</Pill>
+      </AppName>
 
       {/* STT 탭: 제목 텍스트 / 그 외: 프로젝트 이름 인풋 */}
       {isSTT ? (
@@ -153,7 +161,7 @@ export const TopBar = () => {
             📤 내보내기
           </Btn>
           <Btn v="dark" onClick={() => downloadXLSX(codes, quotations, documents)}>↓ XLSX</Btn>
-          <input ref={importRef} type="file" accept=".json,.qualcoder" style={{ display: 'none' }} onChange={handleImport} />
+          <input ref={importRef} type="file" accept=".json,.code4quali" style={{ display: 'none' }} onChange={handleImport} />
         </>
       )}
     </Bar>

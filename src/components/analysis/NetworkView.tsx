@@ -605,6 +605,30 @@ export const NetworkView = () => {
     };
   }, []);
 
+  const handleZoom = useCallback((factor: number, clientX?: number, clientY?: number) => {
+    const wrap = canvasWrapRef.current;
+    if (!wrap) return;
+    const r = wrap.getBoundingClientRect();
+
+    // Default to center if no point provided
+    const sx = clientX ?? (r.left + r.width / 2);
+    const sy = clientY ?? (r.top + r.height / 2);
+
+    const oldZoom = zoomRef.current;
+    const newZoom = Math.min(3, Math.max(0.15, oldZoom * factor));
+    if (newZoom === oldZoom) return;
+
+    // Canvas point under the cursor (screen space -> canvas space)
+    const cx = (sx - r.left - panRef.current.x) / oldZoom;
+    const cy = (sy - r.top - panRef.current.y) / oldZoom;
+
+    setZoom(newZoom);
+    setPan({
+      x: (sx - r.left) - cx * newZoom,
+      y: (sy - r.top) - cy * newZoom,
+    });
+  }, []);
+
   // ─── Ctrl+wheel zoom ──────────────────────────────────────────────────────
   useEffect(() => {
     const el = canvasWrapRef.current;
@@ -612,11 +636,11 @@ export const NetworkView = () => {
     const h = (e: WheelEvent) => {
       if (!e.ctrlKey && !e.metaKey) return;
       e.preventDefault();
-      setZoom(z => Math.min(3, Math.max(0.15, z * (e.deltaY > 0 ? 0.9 : 1.1))));
+      handleZoom(e.deltaY > 0 ? 0.9 : 1.1, e.clientX, e.clientY);
     };
     el.addEventListener('wheel', h, { passive: false });
     return () => el.removeEventListener('wheel', h);
-  }, []);
+  }, [handleZoom]);
 
   // ─── Delete key ────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -1223,9 +1247,9 @@ export const NetworkView = () => {
         <Toolbar>
           <TBtn onClick={handleFit}>⊡ 맞추기</TBtn>
           <TDiv />
-          <TBtn onClick={() => setZoom(z => Math.min(3, z * 1.2))}>+</TBtn>
+          <TBtn onClick={() => handleZoom(1.2)}>+</TBtn>
           <TZoom>{Math.round(zoom * 100)}%</TZoom>
-          <TBtn onClick={() => setZoom(z => Math.max(0.15, z * 0.8))}>−</TBtn>
+          <TBtn onClick={() => handleZoom(0.8)}>−</TBtn>
           <TDiv />
           <TBtn onClick={() => { setPan({ x: 0, y: 0 }); setZoom(1); }}>리셋</TBtn>
           <TDiv />
